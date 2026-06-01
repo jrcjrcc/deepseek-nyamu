@@ -1,0 +1,31 @@
+[package]
+name = "codewhale-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core runtime boundaries for DeepSeek workspace architecture"
+
+[features]
+default = ["dream"]
+dream = []
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+codewhale-agent = { path = "../agent", version = "0.8.46" }
+codewhale-config = { path = "../config", version = "0.8.46" }
+codewhale-execpolicy = { path = "../execpolicy", version = "0.8.46" }
+codewhale-hooks = { path = "../hooks", version = "0.8.46" }
+codewhale-mcp = { path = "../mcp", version = "0.8.46" }
+codewhale-protocol = { path = "../protocol", version = "0.8.46" }
+codewhale-state = { path = "../state", version = "0.8.46" }
+codewhale-tools = { path = "../tools", version = "0.8.46" }
+serde.workspace = true
+serde_json.workspace = true
+dirs.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile = "3.16"
+filetime = "0.2"

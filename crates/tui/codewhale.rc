@@ -1,0 +1,23 @@
+app_icon ICON "codewhale.ico"
+
+1 VERSIONINFO
+FILEVERSION 0,8,46,0
+PRODUCTVERSION 0,8,46,0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "080404B0"
+    BEGIN
+      VALUE "CompanyName", "CodeWhale"
+      VALUE "FileDescription", "CodeWhale - AI Coding Assistant"
+      VALUE "FileVersion", "0.8.46"
+      VALUE "InternalName", "codewhale"
+      VALUE "ProductName", "CodeWhale"
+      VALUE "ProductVersion", "0.8.46"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x804 0x04B0
+  END
+END
