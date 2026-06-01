@@ -586,6 +586,4 @@ description: 当 DeepSeek 需要遵循我的自定义工作流时使用这个技
 
 [MIT](LICENSE)
 
-## Star 历史
 
-[![Star History Chart](https://api.star-history.com/chart?repos=Hmbown/CodeWhale&type=date&legend=top-left)](https://www.star-history.com/?repos=Hmbown%2FCodeWhale&type=date&logscale=&legend=top-left)
