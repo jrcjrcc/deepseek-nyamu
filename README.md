@@ -64,7 +64,8 @@ cargo install codewhale-tui     --locked --force
 [![crates.io](https://img.shields.io/crates/v/codewhale-cli?label=crates.io)](https://crates.io/crates/codewhale-cli)
 [DeepWiki project index](https://deepwiki.com/Hmbown/CodeWhale)
 
-![codewhale 截图](assets/screenshot.png)
+![帮助菜单](assets/help-menu.png) | ![日常使用](assets/daily-use.png) | ![右键菜单汉化](assets/right-click-menu.png)
+*汉化后的帮助菜单 · 日常使用展示 · 右键菜单*
 
 ---
 
