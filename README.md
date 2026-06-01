@@ -8,10 +8,27 @@
 
 | 类别 | 内容 |
 |------|------|
-| 🛠️ **12 项缺陷修复** | Snapshot 死循环、事件通道阻塞、SQLite WAL/连接池、线程饥饿、Session 膨胀、TaskManager 竞态、Dream 文件锁、工具锁、MCP 健康检查等 |
+| 🛠️ **12 项缺陷修复** | Snapshot 死循环、事件通道阻塞、SQLite WAL/连接池、线程饥饿、Session 膨胀、TaskManager 竞态、Dream 文件锁、工具锁、子模块兼容、MCP 健康检查等 |
 | 🚀 **指令系统增强** | `&dream`/`&tips`/`&traps`/`&update` 记忆与实用指令，`##` 快捷记录，三入口统一描述 |
 | 🌏 **完整汉化** | 引擎状态栏、思考标签、侧栏、工具面板标签全覆盖（280+ MessageId） |
 | 🎨 **主题修复** | 工具成功、计划进度/完成/待处理等语义颜色独立化，告别撞色 |
+
+### 12 项修复详述
+
+| # | 问题 | 涉及文件 | 修复方式 |
+|---|------|---------|---------|
+| 1 | Snapshot wipe 死循环 — pack 文件未回收导致反复触发 500MB 阈值 | `snapshot/repo.rs` | wipe 后追加 `git repack -ad` + `git gc --prune=now --aggressive` |
+| 2 | 有界事件通道（256）在 TUI 渲染慢时阻塞引擎循环 | `core/engine.rs` | 通道容量 256 → 65536 |
+| 3 | SQLite 无连接池、无 WAL 模式、无 busy_timeout | `state/lib.rs` | 连接池化，`init_schema()` 设置 PRAGMA |
+| 4 | `block_in_place` + `block_on` 在 tokio 工作线程上同步阻塞 | `commands/cycle.rs`, `skills.rs` | 改为 `tokio::task::spawn_blocking` |
+| 5 | snapshot restore 删除多余文件无日志 | `snapshot/repo.rs` | 删除前输出 `tracing::warn!` 及逐文件日志 |
+| 6 | Session JSON 无限增长，空 session 也写盘 | `session_manager.rs` | 0 消息跳过写入、总文件大小硬性上限 |
+| 7 | `cancel_task` 与 `finish_task` 之间竞态条件 | `task_manager.rs` | `Arc<Mutex<HashMap>>` 原子化状态转换 |
+| 8 | Dream 整合无文件锁，并发 &dream 可能损坏记忆 | `commands/dream.rs` | 启动子代理前调用 `ConsolidationLock::try_acquire()` |
+| 9 | 全局工具写锁序列化所有非并行工具调用 | `core/engine/tool_execution.rs` | 写锁统一改为读锁 |
+| 10 | `std::env::set_var` 在多线程上下文中不安全 | `child_env.rs` | 确认测试代码已受 `env_lock()` 保护，保持原样 |
+| 11 | Git 子模块未检出时 `git add -A` 失败 | `snapshot/repo.rs` | `git add -A --ignore-submodules` |
+| 12 | MCP Server 子进程无健康检查/启动超时 | `mcp.rs` | 添加启动超时 + shutdown 等待子进程 |
 
 详见 [README-optimizations.md](README-optimizations.md)。
 
