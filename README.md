@@ -1,68 +1,42 @@
-# CodeWhale
+# deepseek-nyamu
 
-> 本分支基于 [Hmbown/CodeWhale](https://github.com/Hmbown/CodeWhale)（MIT License），在此致谢。
+> 基于 [CodeWhale v0.8.46](https://github.com/Hmbown/CodeWhale)（MIT License）的深度定制分支。
 >
-> **面向 [DeepSeek V4](https://platform.deepseek.com) 的终端原生编程智能体：100 万 token 上下文、思考模式流式推理、前缀缓存感知。以 `codewhale` 调度器和 `codewhale-tui` 运行时这一组自包含 Rust 二进制发布——开箱即带 MCP 客户端、沙箱和持久化任务队列。**
+> **融合 Claude Code 工作流，增强稳定性，完整汉化。以自包含 Rust 二进制发布——开箱即带 MCP 客户端、沙箱、持久化任务队列和 Dream 记忆系统。**
+
+## 特色
+
+| 类别 | 内容 |
+|------|------|
+| 🛠️ **12 项缺陷修复** | Snapshot 死循环、事件通道阻塞、SQLite WAL/连接池、线程饥饿、Session 膨胀、TaskManager 竞态、Dream 文件锁、工具锁、MCP 健康检查等 |
+| 🚀 **指令系统增强** | `&dream`/`&tips`/`&traps`/`&update` 记忆与实用指令，`##` 快捷记录，三入口统一描述 |
+| 🌏 **完整汉化** | 引擎状态栏、思考标签、侧栏、工具面板标签全覆盖（280+ MessageId） |
+| 🎨 **主题修复** | 工具成功、计划进度/完成/待处理等语义颜色独立化，告别撞色 |
+
+详见 [README-optimizations.md](README-optimizations.md)。
 
 ## 安装
 
-`codewhale` 以一组自包含 Rust 发布二进制安装：`codewhale` 调度器命令，
-以及它在交互会话中启动的同级 `codewhale-tui` 运行时。npm、Homebrew 和
-Docker 会自动安装这两个二进制；Cargo 或手动下载时必须把两者放在同一目录
-（通常是 `PATH` 上的某个目录）。运行时不依赖 Node.js 或 Python。
-
 ```bash
-# 1. npm —— 已装 Node 的最方便方式。npm 包只是一个下载器，
-#    会从 GitHub Releases 拉取对应平台的预编译二进制对，
-#    并不会让 codewhale 本身依赖 Node 运行时。
-npm install -g codewhale
+# 1. 从源码构建（推荐）
+cargo build --release
 
-# 2. Cargo —— 无需 Node，两个 crate 都要安装。
-cargo install codewhale-cli --locked   # `codewhale` 入口
-cargo install codewhale-tui     --locked   # `codewhale-tui` TUI 二进制
+# 2. 或将二进制安装到 PATH
+cargo install --path crates/tui --locked
 
-# 3. Homebrew —— macOS 包管理器。
-#    tap/formula 名称仍是旧名；实际安装 codewhale 和 codewhale-tui。
-brew tap Hmbown/deepseek-tui
-brew install deepseek-tui
-
-# 4. 直接下载 —— GitHub Releases 的平台压缩包。
-#    https://github.com/Hmbown/CodeWhale/releases
-#    压缩包包含 codewhale 和 codewhale-tui 以及安装脚本；
-#    也提供单独二进制给脚本使用，手动安装时请把这一对放在一起。
-
-# 5. Docker —— 预构建发布镜像。
-docker volume create codewhale-home
-docker run --rm -it \
-  -e DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY" \
-  -v codewhale-home:/home/codewhale/.codewhale \
-  -v "$PWD:/workspace" \
-  -w /workspace \
-  ghcr.io/hmbown/codewhale:latest
+# 3. 直接下载 —— GitHub Releases 的平台压缩包。
+#    https://github.com/jrcjrcc/deepseek-nyamu/releases
 ```
 
-> 中国大陆访问较慢时，npm 可加 `--registry=https://registry.npmmirror.com`，
-> 或使用下方的 [Cargo 镜像](#中国大陆--镜像友好安装)。
->
-> 下载安全：官方二进制只发布在
-> `https://github.com/Hmbown/CodeWhale/releases`。手动下载时请校验
-> SHA-256 manifest，并避免相似仓库名或搜索结果里的镜像站。详见
-> [下载安全与校验](docs/INSTALL.md#2-download-safety-and-checksums)。
+> 下载安全：发布版二进制只发布在
+> `https://github.com/jrcjrcc/deepseek-nyamu/releases`。手动下载时请校验
+> SHA-256 manifest。
 
-已经安装过？按你的安装方式更新：
+已经安装过？重新构建即可：
 
 ```bash
-codewhale update                         # release 二进制更新器
-npm install -g codewhale@latest      # npm 包装器
-brew update && brew upgrade deepseek-tui
-cargo install codewhale-cli --locked --force
-cargo install codewhale-tui     --locked --force
+cargo build --release
 ```
-
-[![CI](https://github.com/Hmbown/CodeWhale/actions/workflows/ci.yml/badge.svg)](https://github.com/Hmbown/CodeWhale/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/codewhale)](https://www.npmjs.com/package/codewhale)
-[![crates.io](https://img.shields.io/crates/v/codewhale-cli?label=crates.io)](https://crates.io/crates/codewhale-cli)
-[DeepWiki project index](https://deepwiki.com/Hmbown/CodeWhale)
 
 ![帮助菜单](assets/help-menu.png) | ![日常使用](assets/daily-use.png) | ![右键菜单汉化](assets/right-click-menu.png)
 *汉化后的帮助菜单 · 日常使用展示 · 右键菜单*
