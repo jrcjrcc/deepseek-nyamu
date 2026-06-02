@@ -105,6 +105,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Failed` instead of `Completed` when the loop guard trips (#1859).
 - **DEEPSEEK_YOLO env honoured on startup.** The `--yolo` flag is now
   correctly merged with the `DEEPSEEK_YOLO` environment variable (#1870).
+- **双击 exe 启动时颜色方案错误。** 当直接双击 codewhale.exe 时，Windows
+  启动的是 legacy conhost 窗口，`TERM` 环境变量为空，
+  导致 `ColorDepth::detect()` 回退为 `Ansi16`，真彩色调色板被映射到最近
+  16 色。修复：在 Windows 上 `TERM` 为空时默认使用 `TrueColor`（Windows
+  10+ 的 conhost 实际支持真彩色 VT 序列）。非 Windows 平台保持原有的
+  `Ansi16` 保守默认。
 
 ### Community
 
