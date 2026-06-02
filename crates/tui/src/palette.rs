@@ -1537,6 +1537,18 @@ impl ColorDepth {
         } else if term.contains("256") {
             Self::Ansi256
         } else if term.is_empty() || term == "dumb" {
+            // Windows: conhost.exe (Windows 10+) supports truecolor VT sequences
+            // even when TERM is unset, which is the normal case when the user
+            // double-clicks the executable.  Don't fall back to Ansi16 — that
+            // mangles the 24-bit palette into the nearest 16 named colors.
+            // Other platforms keep the conservative Ansi16 default so that
+            // truly limited terminals (macOS Terminal.app, dumb tmux) don't
+            // render bright-cyan blocks for background tints.
+            #[cfg(target_os = "windows")]
+            {
+                Self::TrueColor
+            }
+            #[cfg(not(target_os = "windows"))]
             Self::Ansi16
         } else {
             // Unknown TERM strings should not receive 24-bit SGR by default.
