@@ -8,7 +8,7 @@
 
 | 类别 | 内容 |
 |------|------|
-| 🛠️ **16 项缺陷修复** | Snapshot 死循环、事件通道阻塞、SQLite PRAGMA+并发测试、线程饥饿、Session 膨胀、TaskManager 竞态、Dream 文件锁、工具锁、子模块兼容、MCP 健康检查、Sub-agent 通知、SSE 看门狗、锁中毒防护、MCP 子进程隔离等 |
+| 🛠️ **17 项缺陷修复** | Snapshot 死循环、事件通道阻塞、SQLite PRAGMA+并发测试、线程饥饿、Session 膨胀、TaskManager 竞态、Dream 文件锁、工具锁、子模块兼容、MCP 健康检查、Sub-agent 通知、SSE 看门狗、锁中毒防护、MCP 子进程隔离、通道背压丢弃等 |
 | 🚀 **指令系统增强** | `&dream`/`&tips`/`&traps`/`&update` 记忆与实用指令，`##` 快捷记录，三入口统一描述 |
 | 🌏 **完整汉化** | 引擎状态栏、思考标签、侧栏、工具面板标签全覆盖（280+ MessageId） |
 | 🎨 **主题修复** | 工具成功、计划进度/完成/待处理等语义颜色独立化，告别撞色 |
@@ -23,7 +23,7 @@
 
 ## 优化详解
 
-### 🔧 16 项代码缺陷修复
+### 🔧 17 项代码缺陷修复
 
 | # | 问题 | 修复方式 |
 |---|------|---------|
@@ -48,6 +48,7 @@
 | 14 | SSE 流式空闲超时 300 秒不合理 | `stream_idle_timeout()` 默认 300s→60s；`ConfigToml` 新增 `stream_idle_timeout_secs: Option<u64>`，配置优先级：config.toml → `DEEPSEEK_STREAM_IDLE_TIMEOUT_SECS` 环境变量 → 默认值；keepalive chunk（`:\n\n`）不再重置 idle timer，仅 `data:` 行才重置。 |
 | 15 | `std::sync::Mutex` 锁中毒级联崩溃 | 7 处 `.lock().unwrap()` 改为 `.unwrap_or_else(\|e\| e.into_inner())`。锁中毒后自动恢复锁内容而非 panic，打印 `tracing::warn` 日志。涉 dream_memory.rs（3 处）、hooks/lib.rs（2 处）、cli/lib.rs（1 处）、config/lib.rs（1 处）。 |
 | 16 | MCP 子进程异常退出残留 | 三路隔离：① Windows Job Object（`KILL_ON_JOB_CLOSE`）/ Linux `PR_SET_PDEATHSIG`（`SIGTERM`）——OS 内核保证父进程异常终止时自动 kill 子进程；② atexit handler 注册全局 PID 表，`process::exit` 或 main 返回时遍历 kill；③ 正常 `Engine::shutdown()` 链反向清理 + `kill_on_drop=true` 兜底。三路互补覆盖 panic=abort、SIGKILL、OOM killer、process::exit 全部异常退出路径。 |
+| 17 | 事件通道满时 engine 停转 | `try_send()` 替代 `send().await`：通道满时丢弃非关键事件（MessageDelta / Status / ThinkingDelta 等瞬时状态），保留关键事件（Error / ToolResult / StreamEnd 等）降级为阻塞发送。LLM 快时不再卡 engine，被丢的事件下一轮 poll 自动补全，用户无感知。 |
 
 ### 🚀 指令系统增强
 
@@ -464,6 +465,89 @@ impl Engine {
 - Unix：prctl PR_SET_PDEATHSIG → 杀死父进程 → 验证子进程收到 SIGTERM
 - atexit：注册 handler → process::exit → 验证 handler 遍历 PID 表并 kill
 - 编译通过，不引入额外依赖
+
+### 📡 通道背压与事件降采样
+
+#### 问题
+
+`Engine` → `UI` 之间通过 `tokio::sync::mpsc` 通道传递事件。原本容量 256 → 已扩大到 65536，但仍然是**有界通道**。如果 LLM 流式生成速度超过 UI 渲染速度，通道积累 → 满 → `send().await` 阻塞 → engine 停转 → 整个流暂停。
+
+```
+LLM 一秒吐 200+ tokens
+    ↓
+engine: send(token).await
+    ↓
+[ 通道 65536 ]
+    ↓
+UI: recv → 解析 → 渲染（跟不上）
+    ↓
+通道满 → sender 阻塞 → engine 被卡住
+    ↓
+用户看到输出停住几秒 → 突然爆发
+```
+
+65536 只是把问题推开，不是消灭。在高速流式生成 + 复杂终端渲染场景下仍可能触发。
+
+#### 实现
+
+`try_send()` + 事件分类降采样：
+
+```rust
+// 改之前——通道满时阻塞
+event_tx.send(event).await?;
+
+// 改之后——满时丢非关键事件
+const CRITICAL_EVENTS: &[EventTag] = &[
+    EventTag::Error,        // 错误不能丢
+    EventTag::ToolResult,   // 工具结果不能丢
+    EventTag::StreamEnd,    // 流结束不能丢
+    EventTag::ApprovalRequired,
+    EventTag::UserInputRequired,
+    EventTag::SessionUpdated,
+    EventTag::ElevationRequired,
+    EventTag::AgentMailbox,
+    EventTag::Compaction,
+    EventTag::CycleAdvanced,
+];
+
+fn send_event(tx: &Sender<Event>, event: Event) -> Result<(), SendError<Event>> {
+    match tx.try_send(event) {
+        Ok(()) => Ok(()),
+        Err(TrySendError::Full(e)) => {
+            if is_critical(&e) {
+                tx.blocking_send(e)?;  // 关键事件降级阻塞
+            } else {
+                trace!("dropped non-critical: {}", e.tag());
+                // 被丢弃的是瞬时状态（MessageDelta/Status），
+                // 下一轮 poll 时最新数据自动补全
+            }
+            Ok(())
+        }
+        Err(TrySendError::Closed(_)) => Err(SendError(...)),
+    }
+}
+```
+
+#### 事件分类完整表
+
+| 分类 | 事件 | 理由 |
+|------|------|------|
+| ✅ 关键（不丢，阻塞发送） | Error, ToolResult, StreamEnd, ApprovalRequired | 丢失会导致逻辑错误 |
+| ✅ 关键（不丢，阻塞发送） | SessionUpdated, ElevationRequired, AgentMailbox | 状态变更必须送达 |
+| ✅ 关键（不丢，阻塞发送） | Compaction*, CycleAdvanced | 压缩/轮次边界 |
+| ❌ 非关键（满时丢弃） | MessageDelta, ThinkingDelta | 瞬时 token，下一轮自动补全 |
+| ❌ 非关键（满时丢弃） | Status, AgentProgress, ToolCallProgress | 状态指示，瞬态 |
+| ❌ 非关键（满时丢弃） | PrefixCacheChange, Capacity*, CoherenceState | 诊断信息，不可见 |
+
+#### 安全性论证
+
+被丢弃的事件都是**幂等且瞬态**的：
+
+- `MessageDelta`：丢几个 token 不会丢失整条消息——下一轮 chunk 推进 latest 序列
+- `Status` / `AgentProgress`：侧栏状态由 engine 的 `WithStatus` 驱动，下一轮 poll 自动刷新
+- `ThinkingDelta`：思考过程——用户不依赖每个 thinking token 的精确到达
+
+关键路径（`Error`、`ToolResult`、`StreamEnd`、`ApprovalRequired`）始终送达，降采样不影响功能正确性。
 
 ### ⌨️ `!` Bash 直通功能
 

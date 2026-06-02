@@ -66,7 +66,7 @@ use super::capacity_memory::{
     load_last_k_capacity_records, new_record_id, now_rfc3339,
 };
 use super::coherence::{CoherenceSignal, CoherenceState, next_coherence_state};
-use super::events::{Event, TurnOutcomeStatus};
+use super::events::{Event, EventSender, TurnOutcomeStatus};
 use super::ops::Op;
 use super::session::Session;
 use super::tool_parser;
@@ -310,7 +310,7 @@ pub struct Engine {
     rx_approval: mpsc::Receiver<ApprovalDecision>,
     rx_user_input: mpsc::Receiver<UserInputDecision>,
     rx_steer: mpsc::Receiver<String>,
-    tx_event: mpsc::Sender<Event>,
+    tx_event: EventSender,
     /// Wakeup channel for the parent turn loop when a direct child sub-agent
     /// terminates (issue #756). Cloned into `SubAgentRuntime` so the runtime
     /// can fan completion events back into the engine.
@@ -424,6 +424,7 @@ impl Engine {
 
         let (tx_op, rx_op) = mpsc::channel(32);
         let (tx_event, rx_event) = mpsc::channel(256);
+        let tx_event = EventSender::new(tx_event);
         let (tx_approval, rx_approval) = mpsc::channel(64);
         let (tx_user_input, rx_user_input) = mpsc::channel(32);
         let (tx_steer, rx_steer) = mpsc::channel(64);
@@ -683,7 +684,7 @@ impl Engine {
                         // Sub-agents don't inherit YOLO mode - use Agent mode defaults
                         self.build_tool_context(AppMode::Agent, self.session.auto_approve),
                         self.session.allow_shell,
-                        Some(self.tx_event.clone()),
+                        Some(self.tx_event.inner_clone()),
                         Arc::clone(&self.subagent_manager),
                     )
                     .with_role_models(self.config.subagent_model_overrides.clone())
@@ -1122,7 +1123,7 @@ impl Engine {
                             self.session.model.clone(),
                             tool_context.clone(),
                             self.session.allow_shell,
-                            Some(self.tx_event.clone()),
+                            Some(self.tx_event.inner_clone()),
                             Arc::clone(&self.subagent_manager),
                         )
                         .with_role_models(self.config.subagent_model_overrides.clone())
