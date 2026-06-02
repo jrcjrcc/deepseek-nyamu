@@ -462,7 +462,10 @@ impl Settings {
         // synchronized-output wrapping unless the user explicitly forced it on.
         if detected_legacy_windows_console_host() {
             self.low_motion = true;
-            self.fancy_animations = false;
+            // fancy_animations stays as-configured so the bottom-right working
+            // strip (sine-wave + 工作中 label) remains visible even under
+            // plain conhost. The animated wave glyphs are cheap (1 sine calc +
+            // a few char swaps per frame); conhost handles them fine.
             if self.synchronized_output.eq_ignore_ascii_case("auto") {
                 self.synchronized_output = "off".to_string();
             }
