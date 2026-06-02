@@ -28,7 +28,9 @@ static CACHE: Mutex<Option<ManifestCache>> = Mutex::new(None);
 /// Invalidate the cache so the next call to `compose_block` rescans and
 /// rebuilds from scratch. Useful after a Dream consolidation or `/clear`.
 pub fn invalidate_manifest_cache() {
-    *CACHE.lock().unwrap() = None;
+    // Recover from a poisoned mutex — the cache is just a performance
+    // optimization, so a stale lock state is safely discardable.
+    *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,7 +67,7 @@ pub fn compose_block(dream_enabled: bool, memory_dir: &Path, _max_file_size: usi
 
     // Fast path: cache hit with identical file set.
     {
-        let guard = CACHE.lock().unwrap();
+        let guard = CACHE.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(ref cached) = *guard {
             if cached.max_mtime_secs == current_max && cached.file_count == file_count {
                 return Some(format!(
@@ -89,7 +91,7 @@ pub fn compose_block(dream_enabled: bool, memory_dir: &Path, _max_file_size: usi
     // Atomically update cache *after* regeneration so concurrent readers
     // still see the old (valid) entry until we finish.
     {
-        let mut guard = CACHE.lock().unwrap();
+        let mut guard = CACHE.lock().unwrap_or_else(|e| e.into_inner());
         *guard = Some(ManifestCache {
             max_mtime_secs: current_max,
             file_count,

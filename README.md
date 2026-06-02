@@ -8,24 +8,28 @@
 
 | 类别 | 内容 |
 |------|------|
-| 🛠️ **12 项缺陷修复** | Snapshot 死循环、事件通道阻塞、SQLite WAL/连接池、线程饥饿、Session 膨胀、TaskManager 竞态、Dream 文件锁、工具锁、子模块兼容、MCP 健康检查等 |
+| 🛠️ **16 项缺陷修复** | Snapshot 死循环、事件通道阻塞、SQLite PRAGMA+并发测试、线程饥饿、Session 膨胀、TaskManager 竞态、Dream 文件锁、工具锁、子模块兼容、MCP 健康检查、Sub-agent 通知、SSE 看门狗、锁中毒防护、MCP 子进程隔离等 |
 | 🚀 **指令系统增强** | `&dream`/`&tips`/`&traps`/`&update` 记忆与实用指令，`##` 快捷记录，三入口统一描述 |
 | 🌏 **完整汉化** | 引擎状态栏、思考标签、侧栏、工具面板标签全覆盖（280+ MessageId） |
 | 🎨 **主题修复** | 工具成功、计划进度/完成/待处理等语义颜色独立化，告别撞色 |
 | 💾 **缓存优化** | Dream RAG 时间戳修复 + mtime 缓存 → 系统 prompt 保持字节稳定，V4 前缀缓存全量命中；Microcompact 折叠旧 tool result → 请求体缩小，重建缓存更快 |
 | ⚡ **微压缩算法** | 数量基微压缩管线：在发 API 前自动折叠 >5 个的旧 tool result，保留结构并给出 `retrieve_tool_result` 路径；与 spillover 机制互补，不影响持久化 session |
+| 🔔 **Sub-agent 通知机制** | `tokio::sync::Notify` 替代 250ms 轮询 + RwLock 读锁争用，sub-agent 完成结果后立即通知，O(1) 零锁等待 |
 | ⌨️ **! bash 直通** | `!<command>` 直通 Shell 执行，不经过 AI。适合 `gcloud auth login`、`ssh`、`gh auth login` 等交互式命令 |
 | 📋 **新增 & 指令** | `&bak` 备份代码文件 / `&rmb` 清除备份 / `&￥` 查询 DeepSeek 余额 |
+| 🕐 **SSE 流式看门狗** | 默认 idle timeout 300s→60s；config.toml 三级注入配置；keepalive 空 chunk 不重置计时器，防静默挂起 |
+| 🔒 **锁中毒防护** | 7 处 `std::sync::Mutex::lock().unwrap()` 改为 `.unwrap_or_else(\|e\| e.into_inner())`，一线程 panic 不再崩全进程 |
+| 🧹 **MCP 子进程隔离** | 三路保障（Windows Job Object / Linux PR_SET_PDEATHSIG + atexit handler + shutdown 链），异常退出时 OS 内核自动终止 MCP 子进程 |
 
 ## 优化详解
 
-### 🔧 12 项代码缺陷修复
+### 🔧 16 项代码缺陷修复
 
 | # | 问题 | 修复方式 |
 |---|------|---------|
 | 1 | Snapshot wipe 死循环（pack 文件未回收） | wipe 后追加 `git repack -ad` + `git gc --prune=now --aggressive` |
 | 2 | 有界事件通道（256）阻塞引擎循环 | 通道容量 256 → 65536 |
-| 3 | SQLite 无连接池/WAL/busy_timeout | 连接池化（`Arc<Mutex<Connection>>`），`init_schema()` 设置 PRAGMA |
+| 3 | SQLite 零 PRAGMA 配置（每 conn() 新建连接，无 WAL/busy_timeout） | `init_schema()` 注入 WAL/busy_timeout/foreign_keys/synchronous/cache_size；per-connection PRAGMAs 在每次 conn() 中设置；新增并发写入测试验证无 SQLITE_BUSY |
 | 4 | `block_in_place` + `block_on` 线程饥饿 | 改为 `tokio::task::spawn_blocking` |
 | 5 | Snapshot restore 删除文件无日志 | 删除前输出 `tracing::warn!` 及逐文件日志 |
 | 6 | Session JSON 无限膨胀 | 0 消息跳过写入、总文件大小硬性上限、超大 tool result 截断 |
@@ -35,6 +39,15 @@
 | 10 | `std::env::set_var` 不安全 | 确认测试代码已有 `env_lock()` 保护（维持原样） |
 | 11 | Git 子模块未检出时 `git add -A` 失败 | `git add -A --ignore-submodules` |
 | 12 | MCP Server 子进程无健康检查 | 添加启动超时 + shutdown 等待子进程 |
+
+#### 第二期（2026-06-03）：并发稳定 + 流式超时 + 锁安全
+
+| # | 问题 | 修复方式 |
+|---|------|---------|
+| 13 | Sub-agent 250ms 轮询 + 读锁争用 | `tokio::sync::Notify` 替代轮询：`wait_for_result()` 从 `loop { sleep(250ms); lock(); check }` 改为 `notified() → lock() → check → .await`。agent 完成时 `update_from_result()`/`update_failed()` 调用 `notify.notify_one()` 立即通知。并发 N 个 agent 的锁竞争从 O(n) 降到 O(1)。 |
+| 14 | SSE 流式空闲超时 300 秒不合理 | `stream_idle_timeout()` 默认 300s→60s；`ConfigToml` 新增 `stream_idle_timeout_secs: Option<u64>`，配置优先级：config.toml → `DEEPSEEK_STREAM_IDLE_TIMEOUT_SECS` 环境变量 → 默认值；keepalive chunk（`:\n\n`）不再重置 idle timer，仅 `data:` 行才重置。 |
+| 15 | `std::sync::Mutex` 锁中毒级联崩溃 | 7 处 `.lock().unwrap()` 改为 `.unwrap_or_else(\|e\| e.into_inner())`。锁中毒后自动恢复锁内容而非 panic，打印 `tracing::warn` 日志。涉 dream_memory.rs（3 处）、hooks/lib.rs（2 处）、cli/lib.rs（1 处）、config/lib.rs（1 处）。 |
+| 16 | MCP 子进程异常退出残留 | 三路隔离：① Windows Job Object（`KILL_ON_JOB_CLOSE`）/ Linux `PR_SET_PDEATHSIG`（`SIGTERM`）——OS 内核保证父进程异常终止时自动 kill 子进程；② atexit handler 注册全局 PID 表，`process::exit` 或 main 返回时遍历 kill；③ 正常 `Engine::shutdown()` 链反向清理 + `kill_on_drop=true` 兜底。三路互补覆盖 panic=abort、SIGKILL、OOM killer、process::exit 全部异常退出路径。 |
 
 ### 🚀 指令系统增强
 
@@ -728,6 +741,44 @@ description: 当 DeepSeek 需要遵循我的自定义工作流时使用这个技
 - **[zhuangbiaowei](https://github.com/zhuangbiaowei)** — 更新发布渠道 (#2145)
 
 ---
+
+## 待办
+
+### 🔴 高优先级
+
+| 问题 | 估时 | 影响 |
+|------|------|------|
+| 路径穿越防护 | ~6h | 模型可读写项目外文件 |
+| 引擎状态机隐式转换 | ~4h | 极端时序下状态不一致 → 死锁 |
+| API 密钥热重载 | ~2h | 换 key 后必须重启 |
+
+### 🟠 中优先级
+
+| 问题 | 估时 | 影响 |
+|------|------|------|
+| tool_outputs 目录膨胀 | ~3h | 磁盘占用无限增长 |
+| microcompact 引用断裂 | ~3h | 模型拿到死链接 → 幻觉 |
+| 启动时间累积 | ~6h | 每次启动 3-10s |
+| 推理 token 复制 | ~4h | 首 token 延迟 +0.5~2s |
+| 通道背压缺失 | ~2h | 极端场景引擎卡顿 |
+| spawn_blocking 线程耗尽 | ~2h | 高并发下延迟飙升 |
+| 工具路由表膨胀 | ~8h | 请求成本随工具数线性增 |
+
+### 🟡 低优先级
+
+| 问题 | 估时 | 影响 |
+|------|------|------|
+| Session JSON 写放大 | ~6h | 长对话 IO 膨胀 |
+| Compaction 内存尖峰 | ~6h | 1M 窗口压缩时 OOM 风险 |
+| 备份文件堆积 | ~1h | 目录膨胀 |
+| Snapshot 磁盘增长 | ~4h | 快照目录可达数 GB |
+| 引擎状态栏英文残留 | ~4h | 非核心 UX |
+| chat.rs 单文件 3273 行 | ~6h | 编译慢、修改耦合 |
+| MCP 锁文件 NFS 问题 | ~4h | 网络磁盘环境不可靠 |
+| 备份/恢复无回滚点 | ~2h | 中途失败状态不一致 |
+| 默认型号文档引用残留 | ~1h | 文档 vs 代码不一致 |
+| 生成文件版本标记缺失 | ~2h | 跨环境复制难溯源 |
+| 死代码警告积累 | ~2h | CI 噪声 |
 
 ## 贡献
 

@@ -2349,7 +2349,12 @@ mod tests {
 
         impl KeyringStore for RecordingStore {
             fn get(&self, key: &str) -> Result<Option<String>, SecretsError> {
-                self.gets.lock().unwrap().push(key.to_string());
+                self.gets
+                    .lock()
+                    .unwrap_or_else(|e| {
+                        e.into_inner()
+                    })
+                    .push(key.to_string());
                 Ok(None)
             }
 

@@ -533,6 +533,10 @@ impl McpTransport for StdioTransport {
             let _ = self.child.kill();
             let _ = self.child.wait().await;
         }
+        // Clean shutdown: remove from the process-guard registry.
+        if let Some(pid) = self.child.id() {
+            crate::process_guard::unregister_child(pid);
+        }
     }
 }
 
@@ -543,6 +547,11 @@ impl McpTransport for StdioTransport {
 impl Drop for StdioTransport {
     fn drop(&mut self) {
         send_sigterm(&self.child);
+        // Best-effort: remove from the process-guard registry.
+        // If `shutdown()` was already called, this is a no-op.
+        if let Some(pid) = self.child.id() {
+            crate::process_guard::unregister_child(pid);
+        }
     }
 }
 
@@ -1253,6 +1262,16 @@ impl McpConnection {
                 .stderr(std::process::Stdio::piped())
                 .kill_on_drop(true);
 
+            // ── Kernel-level child-process lifecycle guarantee ──
+            // On Linux, enable parent-death signal so the child is
+            // auto-killed when this process exits (covers SIGKILL,
+            // OOM, and any path where Drop doesn't run).
+            #[cfg(target_os = "linux")]
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.pre_exec(crate::process_guard::pre_exec_setup());
+            }
+
             // MCP stdio servers are user-configured integrations. Use the
             // wider MCP allowlist so common Node/Python/proxy/CA-bundle
             // bootstrap variables (NVM_DIR, NODE_OPTIONS, NPM_CONFIG_*,
@@ -1291,6 +1310,11 @@ impl McpConnection {
                      (transport=stdio cmd={command:?} args={:?})",
                     config.args,
                 );
+            }
+
+            // Register the child PID for guaranteed cleanup on crash.
+            if let Some(pid) = child.id() {
+                crate::process_guard::register_child(pid);
             }
 
             let stdin = child.stdin.take().context("Failed to get MCP stdin")?;

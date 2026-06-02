@@ -26,13 +26,36 @@ pub(super) struct ToolUseState {
 /// **This is the idle timeout** — it resets on every SSE chunk, so long
 /// thinking turns that ARE producing reasoning_content stay alive. Only a
 /// genuine `chunk_timeout` window of silence kills the stream.
-const DEFAULT_STREAM_CHUNK_TIMEOUT_SECS: u64 = 300;
+///
+/// Reduced from 300s → 60s in v0.8.46: the old value meant a dead stream
+/// kept the user waiting 5 minutes. 60s matches mainstream LLM clients
+/// (Claude Code uses 60s, OpenAI defaults to 30-60s). Deep thinking turns
+/// still keep the stream alive by emitting reasoning_content chunks; a
+/// 60s gap in chunks means something is genuinely wrong.
+const DEFAULT_STREAM_CHUNK_TIMEOUT_SECS: u64 = 60;
 const MIN_STREAM_CHUNK_TIMEOUT_SECS: u64 = 1;
-const MAX_STREAM_CHUNK_TIMEOUT_SECS: u64 = 3600;
+const MAX_STREAM_CHUNK_TIMEOUT_SECS: u64 = 600;
 const STREAM_IDLE_TIMEOUT_ENV: &str = "DEEPSEEK_STREAM_IDLE_TIMEOUT_SECS";
 
+/// Static override for `stream_chunk_timeout_secs`, populated at app startup
+/// from `config.toml` field `stream_idle_timeout_secs` (via
+/// [`set_stream_idle_timeout_secs`]). Priority: config.toml > env var > default.
+static OVERRIDE_STREAM_IDLE_TIMEOUT_SECS: std::sync::OnceLock<Option<u64>> =
+    std::sync::OnceLock::new();
+
+/// Inject the config.toml value at app startup. Must be called once before
+/// any stream is spawned. Subsequent calls are silently ignored.
+pub fn set_stream_idle_timeout_secs(val: Option<u64>) {
+    let _ = OVERRIDE_STREAM_IDLE_TIMEOUT_SECS.set(val);
+}
+
 /// Reads the shared stream idle-timeout override used by the SSE client.
+/// Priority: config.toml (via static override) > env var `DEEPSEEK_STREAM_IDLE_TIMEOUT_SECS`
+/// > default.
 pub(super) fn stream_chunk_timeout_secs() -> u64 {
+    if let Some(Some(v)) = OVERRIDE_STREAM_IDLE_TIMEOUT_SECS.get() {
+        return (*v).clamp(MIN_STREAM_CHUNK_TIMEOUT_SECS, MAX_STREAM_CHUNK_TIMEOUT_SECS);
+    }
     stream_chunk_timeout_secs_from_env(std::env::var(STREAM_IDLE_TIMEOUT_ENV).ok().as_deref())
 }
 

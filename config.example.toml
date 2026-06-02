@@ -187,6 +187,12 @@ max_subagents = 10 # optional (1-20)
 # [subagents]
 # max_concurrent = 10
 # api_timeout_secs = 120 # per-step API timeout, clamped to 1..=1800
+# stream_idle_timeout_secs = 60 # SSE stream idle timeout. How long to wait
+#                                # without a `data:` chunk before assuming the
+#                                # stream is stalled. Keepalive-only chunks
+#                                # (`:\n\n`) do NOT reset this timer.
+#                                # Environment variable: DEEPSEEK_STREAM_IDLE_TIMEOUT_SECS
+#                                # Default: 60s, min 1s, max 600s
 
 # Optional managed policy paths (defaults to /etc/deepseek/*.toml on unix):
 # managed_config_path = "/etc/deepseek/managed_config.toml"

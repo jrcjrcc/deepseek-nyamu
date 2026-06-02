@@ -1150,6 +1150,13 @@ pub struct Config {
     /// Vision model configuration for the `image_analyze` tool.
     #[serde(default)]
     pub vision_model: Option<VisionModelConfig>,
+
+    /// SSE stream idle timeout in seconds. Controls how long to wait without
+    /// a valid data chunk before assuming the stream is stalled.
+    /// Priority: this field > `DEEPSEEK_STREAM_IDLE_TIMEOUT_SECS` env var > default (60s).
+    /// Keepalive-only chunks (empty lines, comments) do NOT reset the timer.
+    #[serde(default)]
+    pub stream_idle_timeout_secs: Option<u64>,
 }
 
 /// Vision model configuration for the `image_analyze` tool.
@@ -3321,6 +3328,9 @@ fn merge_config(base: Config, override_cfg: Config) -> Config {
         strict_tool_mode: override_cfg.strict_tool_mode.or(base.strict_tool_mode),
         runtime_api: override_cfg.runtime_api.or(base.runtime_api),
         workshop: override_cfg.workshop.or(base.workshop),
+        stream_idle_timeout_secs: override_cfg
+            .stream_idle_timeout_secs
+            .or(base.stream_idle_timeout_secs),
     }
 }
 

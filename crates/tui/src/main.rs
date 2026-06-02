@@ -49,6 +49,7 @@ mod models;
 mod network_policy;
 mod palette;
 mod prefix_cache;
+mod process_guard;
 mod pricing;
 mod project_context;
 mod project_doc;

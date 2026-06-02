@@ -14,7 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, Notify, RwLock};
 
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
@@ -1026,6 +1026,10 @@ pub struct SubAgentManager {
     /// agents whose `session_boot_id` doesn't match this value as
     /// "from prior session" so `agent_list` can hide them by default.
     current_session_boot_id: String,
+    /// Notified when any agent reaches a terminal state.
+    /// `wait_for_result` waits on this instead of polling,
+    /// eliminating read-lock contention with `cancel_agent`.
+    completion_notify: Arc<Notify>,
 }
 
 impl SubAgentManager {
@@ -1041,6 +1045,7 @@ impl SubAgentManager {
             // Fresh boot id per manager. Used by #405 to classify
             // re-loaded persisted agents as "prior session".
             current_session_boot_id: format!("boot_{}", &Uuid::new_v4().to_string()[..12]),
+            completion_notify: Arc::new(Notify::new()),
         }
     }
 
@@ -3252,9 +3257,15 @@ async fn wait_for_result(
     agent_id: &str,
     timeout: Duration,
 ) -> Result<(SubAgentResult, bool), ToolError> {
+    // Clone the notify handle with a brief read lock, then drop the lock.
+    let notify = {
+        let mgr = manager.read().await;
+        mgr.completion_notify.clone()
+    };
     let deadline = Instant::now() + timeout;
 
     loop {
+        // Check status with a brief read lock.
         let snapshot = {
             let manager = manager.read().await;
             manager
@@ -3269,7 +3280,11 @@ async fn wait_for_result(
             return Ok((snapshot, true));
         }
 
-        tokio::time::sleep(RESULT_POLL_INTERVAL).await;
+        // Wait for agent completion notification or timeout.
+        tokio::select! {
+            _ = notify.notified() => { /* loop to re-check */ }
+            _ = tokio::time::sleep(deadline - Instant::now()) => {}
+        }
     }
 }
 
@@ -3280,9 +3295,14 @@ async fn wait_for_agents(
     wait_mode: WaitMode,
     timeout: Duration,
 ) -> Result<(Vec<SubAgentResult>, bool), ToolError> {
+    let notify = {
+        let mgr = manager.read().await;
+        mgr.completion_notify.clone()
+    };
     let deadline = Instant::now() + timeout;
 
     loop {
+        // Read all agent statuses with a brief read lock.
         let snapshots = {
             let manager = manager.read().await;
             ids.iter()
@@ -3301,7 +3321,10 @@ async fn wait_for_agents(
             return Ok((snapshots, true));
         }
 
-        tokio::time::sleep(RESULT_POLL_INTERVAL).await;
+        tokio::select! {
+            _ = notify.notified() => {}
+            _ = tokio::time::sleep(deadline - Instant::now()) => {}
+        }
     }
 }
 

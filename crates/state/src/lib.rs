@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, params};
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -156,14 +157,31 @@ impl StateStore {
     }
 
     fn conn(&self) -> Result<Connection> {
-        Connection::open(&self.db_path)
-            .with_context(|| format!("failed to open state db {}", self.db_path.display()))
+        let conn = Connection::open(&self.db_path)
+            .with_context(|| format!("failed to open state db {}", self.db_path.display()))?;
+        // Per-connection PRAGMAs: these don't persist to the DB file,
+        // so must be set on every new connection. WAL mode is set once
+        // in init_schema() and persists to the database journal.
+        conn.execute_batch(
+            "PRAGMA busy_timeout=5000;
+             PRAGMA foreign_keys=ON;
+             PRAGMA synchronous=NORMAL;
+             PRAGMA cache_size=-65536;",
+        )
+        .with_context(|| "failed to set per-connection PRAGMAs")?;
+        Ok(conn)
     }
 
     fn init_schema(&self) -> Result<()> {
         let conn = self.conn()?;
         conn.execute_batch(
             r#"
+            PRAGMA journal_mode=WAL;
+            PRAGMA busy_timeout=5000;
+            PRAGMA foreign_keys=ON;
+            PRAGMA synchronous=NORMAL;
+            PRAGMA cache_size=-65536;
+
             CREATE TABLE IF NOT EXISTS threads (
                 id TEXT PRIMARY KEY,
                 rollout_path TEXT,

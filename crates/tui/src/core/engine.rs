@@ -2079,7 +2079,7 @@ use context::{
 mod dispatch;
 mod loop_guard;
 mod lsp_hooks;
-mod streaming;
+pub(crate) mod streaming;
 mod tool_catalog;
 mod tool_execution;
 mod tool_setup;

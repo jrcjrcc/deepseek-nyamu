@@ -673,6 +673,11 @@ fn handle_memory_quick_add(app: &mut App, input: &str, config: &Config) {
 }
 
 fn build_engine_config(app: &App, config: &Config) -> EngineConfig {
+    // Inject config.toml's stream_idle_timeout_secs into the streaming module's
+    // static override. The SSE stream code reads this instead of polling the config.
+    crate::core::engine::streaming::set_stream_idle_timeout_secs(
+        config.stream_idle_timeout_secs,
+    );
     EngineConfig {
         model: app.model.clone(),
         workspace: app.workspace.clone(),

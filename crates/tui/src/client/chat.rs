@@ -306,8 +306,13 @@ impl DeepSeekClient {
                 };
 
                 bytes_received = bytes_received.saturating_add(chunk.len());
-                last_event_at = std::time::Instant::now();
                 byte_buf.extend_from_slice(&chunk);
+
+                // Track whether this chunk contains meaningful SSE data
+                // (not just keepalive comments or whitespace). Only meaningful
+                // data resets the idle timer, preventing keepalive-only streams
+                // from masking a dead connection.
+                let mut chunk_had_data = false;
 
                 // Guard against unbounded buffer growth (e.g., malformed stream without newlines)
                 const MAX_SSE_BUF: usize = 10 * 1024 * 1024; // 10 MB
@@ -368,6 +373,7 @@ impl DeepSeekClient {
 
                     if let Some(data) = line.strip_prefix("data: ") {
                         line_buf.push_str(data);
+                        chunk_had_data = true;
                     }
                     // Ignore other SSE fields (event:, id:, retry:)
 
@@ -376,6 +382,14 @@ impl DeepSeekClient {
                         // Yield backpressure relief to avoid starving downstream consumers.
                         break;
                     }
+                }
+
+                // Only reset the idle timer on chunks with actual data lines.
+                // Pure keepalive (comment lines, empty frames) does NOT extend
+                // the timeout window, so a connection that has been producing
+                // nothing but `:\n\n` will eventually trigger the stall detector.
+                if chunk_had_data {
+                    last_event_at = std::time::Instant::now();
                 }
             }
 

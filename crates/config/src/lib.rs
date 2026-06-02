@@ -245,6 +245,13 @@ pub struct ConfigToml {
     /// applies the defaults documented in [`LspConfigToml`].
     #[serde(default)]
     pub lsp: Option<LspConfigToml>,
+    /// SSE stream idle timeout in seconds.
+    /// How long to wait without receiving a valid chunk before timing out
+    /// the stream. Keepalive-only chunks (comments, empty lines) do NOT
+    /// reset this timer. When absent, the TUI falls back to
+    /// `DEEPSEEK_STREAM_IDLE_TIMEOUT_SECS` env var, then the default (60s).
+    #[serde(default)]
+    pub stream_idle_timeout_secs: Option<u64>,
     #[serde(flatten)]
     pub extras: BTreeMap<String, toml::Value>,
 }
@@ -2262,7 +2269,10 @@ mod tests {
 
     impl codewhale_secrets::KeyringStore for RecordingSecretsStore {
         fn get(&self, key: &str) -> Result<Option<String>, codewhale_secrets::SecretsError> {
-            self.gets.lock().unwrap().push(key.to_string());
+            self.gets
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(key.to_string());
             Ok(self.value.clone())
         }
 

@@ -262,14 +262,26 @@ mod tests {
 
     impl RecordingSink {
         fn events(&self) -> Vec<Value> {
-            self.events.lock().unwrap().clone()
+            self.events
+                .lock()
+                .unwrap_or_else(|e| {
+                    tracing::warn!("events lock was poisoned, recovering state");
+                    e.into_inner()
+                })
+                .clone()
         }
     }
 
     #[async_trait::async_trait]
     impl HookSink for RecordingSink {
         async fn emit(&self, event: &HookEvent) -> Result<()> {
-            self.events.lock().unwrap().push(event.to_json());
+            self.events
+                .lock()
+                .unwrap_or_else(|e| {
+                    tracing::warn!("events lock was poisoned, recovering state");
+                    e.into_inner()
+                })
+                .push(event.to_json());
             Ok(())
         }
     }
