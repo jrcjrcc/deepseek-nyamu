@@ -1,5 +1,6 @@
 "use client";
 
+import DOMPurify from "dompurify";
 import { useEffect, useRef, useState } from "react";
 
 type Props = {
@@ -73,15 +74,9 @@ export function MermaidDiagram({ chart, label, fallback }: Props) {
     );
   }
 
-  // Defense-in-depth: sanitize SVG output even though mermaid's
-  // securityLevel is "strict". Strips <script> tags, event handler
-  // attributes (onclick, onload, onerror, ...), and javascript: URLs
-  // to protect against any mermaid bypass or future config change.
-  const sanitized = svg
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, " ")
-    .replace(/(?:href|src|xlink:href)\s*=\s*"javascript:/gi, 'href="#blocked"')
-    .replace(/(?:href|src|xlink:href)\s*=\s*'javascript:/gi, "href='#blocked'");
+  // Sanitize SVG output with DOMPurify to block XSS vectors.
+  // Replaces the manual regex approach with a battle-tested library.
+  const sanitized = DOMPurify.sanitize(svg);
 
   return (
     <div

@@ -409,7 +409,11 @@ async fn require_app_server_token(
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
         .and_then(|raw| raw.strip_prefix("Bearer "))
-        .is_some_and(|token| token == expected);
+        .is_some_and(|token| {
+            // Constant-time comparison to prevent timing attacks
+            // against bearer-token authentication.
+            subtle::ConstantTimeEq::ct_eq(token.as_bytes(), expected.as_bytes()).into()
+        });
 
     if authorized {
         next.run(req).await

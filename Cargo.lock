@@ -901,6 +901,7 @@ dependencies = [
  "codewhale-tools",
  "serde",
  "serde_json",
+ "subtle",
  "tempfile",
  "tokio",
  "tower",

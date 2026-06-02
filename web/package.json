@@ -15,6 +15,7 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
+    "dompurify": "^3.2.4",
     "mermaid": "^11.15.0",
     "next": "^15.5.18",
     "react": "^19.0.0",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "^1.19.7",
+    "@types/dompurify": "^3.2.5",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
