@@ -8,7 +8,7 @@
 
 | 类别 | 内容 |
 |------|------|
-| 🛠️ **17 项缺陷修复** | Snapshot 死循环、事件通道阻塞、SQLite PRAGMA+并发测试、线程饥饿、Session 膨胀、TaskManager 竞态、Dream 文件锁、工具锁、子模块兼容、MCP 健康检查、Sub-agent 通知、SSE 看门狗、锁中毒防护、MCP 子进程隔离、通道背压丢弃等 |
+| 🛠️ **19 项缺陷修复** | Snapshot 死循环、事件通道阻塞、SQLite PRAGMA+并发测试、线程饥饿、Session 膨胀、TaskManager 竞态、Dream 文件锁、工具锁、子模块兼容、MCP 健康检查、Sub-agent 通知、SSE 看门狗、锁中毒防护、MCP 子进程隔离、通道背压丢弃、serde 静默错误、APPROVAL_TIMEOUT 可配等 |
 | 🚀 **指令系统增强** | `&dream`/`&tips`/`&traps`/`&update` 记忆与实用指令，`##` 快捷记录，三入口统一描述 |
 | 🌏 **完整汉化** | 引擎状态栏、思考标签、侧栏、工具面板标签全覆盖（280+ MessageId） |
 | 🎨 **主题修复** | 工具成功、计划进度/完成/待处理等语义颜色独立化，告别撞色 |
@@ -23,7 +23,7 @@
 
 ## 优化详解
 
-### 🔧 17 项代码缺陷修复
+### 🔧 19 项代码缺陷修复
 
 | # | 问题 | 修复方式 |
 |---|------|---------|
@@ -49,6 +49,8 @@
 | 15 | `std::sync::Mutex` 锁中毒级联崩溃 | 7 处 `.lock().unwrap()` 改为 `.unwrap_or_else(\|e\| e.into_inner())`。锁中毒后自动恢复锁内容而非 panic，打印 `tracing::warn` 日志。涉 dream_memory.rs（3 处）、hooks/lib.rs（2 处）、cli/lib.rs（1 处）、config/lib.rs（1 处）。 |
 | 16 | MCP 子进程异常退出残留 | 三路隔离：① Windows Job Object（`KILL_ON_JOB_CLOSE`）/ Linux `PR_SET_PDEATHSIG`（`SIGTERM`）——OS 内核保证父进程异常终止时自动 kill 子进程；② atexit handler 注册全局 PID 表，`process::exit` 或 main 返回时遍历 kill；③ 正常 `Engine::shutdown()` 链反向清理 + `kill_on_drop=true` 兜底。三路互补覆盖 panic=abort、SIGKILL、OOM killer、process::exit 全部异常退出路径。 |
 | 17 | 事件通道满时 engine 停转 | `try_send()` 替代 `send().await`：通道满时丢弃非关键事件（MessageDelta / Status / ThinkingDelta 等瞬时状态），保留关键事件（Error / ToolResult / StreamEnd 等）降级为阻塞发送。LLM 快时不再卡 engine，被丢的事件下一轮 poll 自动补全，用户无感知。 |
+| 18 | serde 静默吞掉反序列化错误 | `state/src/lib.rs` 3 处 `serde_json::from_str(&state_json).unwrap_or(Value::Null)` 改为 `.map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?` / `.with_context(...)?`。checkpoint 数据损坏时错误不再被 Null 吞掉，向上传播到调用方。 |
+| 19 | APPROVAL_TIMEOUT 硬编码 300 秒 | `runtime_threads.rs` 的 `const APPROVAL_DECISION_TIMEOUT: Duration = Duration::from_secs(300)` 改为 `OnceLock<Duration>` + `approval_timeout()` 函数 + `set_approval_timeout_secs()` setter。运行时优先级：环境变量 `CODEWHALE_APPROVAL_TIMEOUT_SECS` → 默认值 300s。 |
 
 ### 🚀 指令系统增强
 
@@ -548,6 +550,93 @@ fn send_event(tx: &Sender<Event>, event: Event) -> Result<(), SendError<Event>> 
 - `ThinkingDelta`：思考过程——用户不依赖每个 thinking token 的精确到达
 
 关键路径（`Error`、`ToolResult`、`StreamEnd`、`ApprovalRequired`）始终送达，降采样不影响功能正确性。
+
+### 🗑️ serde 静默错误传播
+
+#### 问题
+
+`crates/state/src/lib.rs` 中 3 处 `serde_json::from_str(&state_json)` 在解析失败时用 `unwrap_or(Value::Null)` 把错误静默吞掉：
+
+```rust
+// 改之前——checkpoint 或 session JSON 损坏时返回 Null
+let state_json: String = conn.query_row(...)?;
+let value: Value = serde_json::from_str(&state_json).unwrap_or(Value::Null);
+// 调用方拿到 Null → 当作"没有数据"继续执行
+// 损坏的数据不被察觉，错误影响无声扩散
+```
+
+这导致：如果某次写入中断导致 JSON 文件截断或格式错误，读取时不报错、不日志、不恢复——只是返回空值，后续逻辑基于不存在的数据做出错误决策。
+
+#### 实现
+
+```rust
+// 改之后——前两处：serde 错误转化为 rusqlite 错误向上传播
+let value: Value = serde_json::from_str(&state_json)
+    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+
+// 第三处：anyhow context 携带 JSON 长度辅助调试
+let value: Value = serde_json::from_str(&state_json)
+    .with_context(|| format!("corrupt checkpoint state JSON (len={})", state_json.len()))?;
+```
+
+三处修复：
+
+| 位置 | 原因 | 效果 |
+|------|------|------|
+| `lib.rs:584` | `query_row` 回调内 → 返回 `rusqlite::Error` | 错误直接沿数据库调用栈传播 |
+| `lib.rs:605` | 同上模式 | 同上 |
+| `lib.rs:637` | 已有 anyhow 上下文 | `with_context` 附加 JSON 长度信息 |
+
+### ⏱️ APPROVAL_TIMEOUT 硬编码可配
+
+#### 问题
+
+`runtime_threads.rs:69` 中审批决策超时被硬编码为 300 秒：
+
+```rust
+// 改之前
+const APPROVAL_DECISION_TIMEOUT: Duration = Duration::from_secs(300);
+```
+
+这意味：
+- CI/CD 场景中每个审批步骤必须干等最多 300 秒才默认拒绝
+- 没有人真的需要 5 分钟来按一个"允许"按钮
+- 不可配置——用户无法根据自身安全策略调整
+
+#### 实现
+
+改为 `OnceLock<Duration>` + 运行时 setter + 环境变量覆盖：
+
+```rust
+// 改之后——默认值 + 环境变量覆盖
+static APPROVAL_DECISION_TIMEOUT: OnceLock<Duration> = OnceLock::new();
+
+const DEFAULT_APPROVAL_TIMEOUT_SECS: u64 = 300;
+
+pub fn approval_timeout() -> Duration {
+    *APPROVAL_DECISION_TIMEOUT.get_or_init(|| {
+        let secs = env::var("CODEWHALE_APPROVAL_TIMEOUT_SECS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(DEFAULT_APPROVAL_TIMEOUT_SECS);
+        Duration::from_secs(secs.clamp(10, 3600))
+    })
+}
+
+// 由 RuntimeAPI 注入
+pub fn set_approval_timeout_secs(secs: u64) {
+    let _ = APPROVAL_DECISION_TIMEOUT.set(Duration::from_secs(secs.clamp(10, 3600)));
+}
+```
+
+使用处（2 处）从直接引用 `const` 改为调用 `approval_timeout()` 函数。
+
+配置优先级：
+```
+set_approval_timeout_secs() 运行时注入 → CODEWHALE_APPROVAL_TIMEOUT_SECS 环境变量 → 默认值 300s
+```
+
+ConfigToml 未加字段——TUI 的 Config 有 50+ 处 struct literal，加字段需同步修改全部，投入产出比不划算。
 
 ### ⌨️ `!` Bash 直通功能
 
