@@ -111,6 +111,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   16 色。修复：在 Windows 上 `TERM` 为空时默认使用 `TrueColor`（Windows
   10+ 的 conhost 实际支持真彩色 VT 序列）。非 Windows 平台保持原有的
   `Ansi16` 保守默认。
+- **双击 exe 启动时右下角滚动状态条不显示。**
+  `detected_legacy_windows_console_host()` 把 `fancy_animations` 硬设
+  为 `false`，导致工作状态滚动条（波浪动画 + 工作中标签）整个消失。
+  修复：去掉该 override，`fancy_animations` 保持用户配置值。
 
 ### Community
 
