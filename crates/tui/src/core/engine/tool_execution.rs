@@ -272,7 +272,7 @@ impl Engine {
         lock: Arc<RwLock<()>>,
         supports_parallel: bool,
         interactive: bool,
-        tx_event: mpsc::Sender<Event>,
+        tx_event: crate::core::events::EventSender,
         tool_name: String,
         tool_input: serde_json::Value,
         registry: Option<&crate::tools::ToolRegistry>,
@@ -311,7 +311,7 @@ impl Engine {
         // `InteractiveTerminalGuard` doc-comment for the regression this
         // closes (parent terminal scrollback hijacking the TUI after a
         // cancelled interactive tool).
-        let _terminal = InteractiveTerminalGuard::engage(tx_event, interactive).await;
+        let _terminal = InteractiveTerminalGuard::engage(tx_event.inner_clone(), interactive).await;
 
         let outcome = if McpPool::is_mcp_tool(&tool_name) {
             if let Some(pool) = mcp_pool {

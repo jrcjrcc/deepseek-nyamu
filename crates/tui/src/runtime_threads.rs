@@ -66,7 +66,18 @@ fn validated_record_id<'a>(id: &'a str, label: &str) -> Result<&'a str> {
 /// might misinterpret message counts; bumping is the safe choice.
 const CURRENT_RUNTIME_SCHEMA_VERSION: u32 = 2;
 const RUNTIME_RESTART_REASON: &str = "Interrupted by process restart";
-const APPROVAL_DECISION_TIMEOUT: Duration = Duration::from_secs(300);
+static APPROVAL_DECISION_TIMEOUT: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
+
+/// Inject the approval timeout from config. The default is 300 seconds.
+/// Safe to call multiple times; only the first call takes effect.
+pub fn set_approval_timeout_secs(secs: u64) {
+    let _ = APPROVAL_DECISION_TIMEOUT.set(Duration::from_secs(secs));
+}
+
+/// Returns the configured approval decision timeout (default 300s).
+fn approval_timeout() -> Duration {
+    *APPROVAL_DECISION_TIMEOUT.get().unwrap_or(&Duration::from_secs(300))
+}
 
 const fn default_runtime_schema_version() -> u32 {
     CURRENT_RUNTIME_SCHEMA_VERSION
@@ -2689,7 +2700,7 @@ impl RuntimeThreadManager {
                     }
 
                     let rx = self.register_pending_approval(&id);
-                    match tokio::time::timeout(APPROVAL_DECISION_TIMEOUT, rx).await {
+                    match tokio::time::timeout(approval_timeout(), rx).await {
                         Ok(Ok(ExternalApprovalDecision::Allow { remember })) => {
                             if remember {
                                 self.remember_thread_auto_approve(&thread_id).await;
@@ -2738,7 +2749,7 @@ impl RuntimeThreadManager {
                                 "approval.timeout",
                                 json!({
                                     "approval_id": id,
-                                    "timeout_secs": APPROVAL_DECISION_TIMEOUT.as_secs(),
+                                    "timeout_secs": approval_timeout().as_secs(),
                                 }),
                             )
                             .await

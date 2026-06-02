@@ -372,6 +372,16 @@ pub async fn run_http_server(
         config.default_text_model.clone(),
         Some(options.workers),
     );
+
+    // Inject approval timeout from env var or default before any
+    // runtime thread is spawned. Falls back to 300s if unset.
+    crate::runtime_threads::set_approval_timeout_secs(
+        std::env::var("CODEWHALE_APPROVAL_TIMEOUT_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(300),
+    );
+
     let runtime_threads = Arc::new(RuntimeThreadManager::open(
         config.clone(),
         workspace.clone(),
@@ -2007,6 +2017,7 @@ mod tests {
             deepseek_v4_flash_prior: None,
             fallback_default_prior: None,
         });
+        crate::runtime_threads::set_approval_timeout_secs(300);
         let runtime_threads: SharedRuntimeThreadManager = Arc::new(RuntimeThreadManager::open(
             config,
             PathBuf::from("."),

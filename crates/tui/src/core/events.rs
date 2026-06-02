@@ -6,6 +6,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use serde_json::Value;
+use tokio::sync::mpsc;
 
 use crate::core::coherence::CoherenceState;
 use crate::error_taxonomy::ErrorEnvelope;
@@ -300,5 +301,93 @@ impl Event {
         Event::Status {
             message: message.into(),
         }
+    }
+
+    /// Whether this event must be delivered even under backpressure.
+    ///
+    /// Critical events: errors, completions, approvals, state transitions.
+    /// Non-critical: incremental deltas, transient progress, status.
+    pub fn is_critical(&self) -> bool {
+        matches!(
+            self,
+            Event::Error { .. }
+                | Event::MessageComplete { .. }
+                | Event::ThinkingComplete { .. }
+                | Event::ToolCallComplete { .. }
+                | Event::TurnComplete { .. }
+                | Event::CompactionCompleted { .. }
+                | Event::CompactionFailed { .. }
+                | Event::CycleAdvanced { .. }
+                | Event::ApprovalRequired { .. }
+                | Event::UserInputRequired { .. }
+                | Event::SessionUpdated { .. }
+                | Event::AgentComplete { .. }
+                | Event::AgentList { .. }
+                | Event::SubAgentMailbox { .. }
+                | Event::PauseEvents { .. }
+                | Event::ResumeEvents
+                | Event::ElevationRequired { .. }
+        )
+    }
+}
+
+// ───── EventSender: 背压感知的事件通道 ─────
+
+/// A wrapper around `mpsc::Sender<Event>` that applies try-send + downsampling
+/// to prevent backpressure from blocking the engine when the UI is slow.
+///
+/// **Critical events** (errors, completions, approvals) fall back to blocking
+/// send when the channel is full — they must not be lost.
+///
+/// **Non-critical events** (incremental text, status, progress) are silently
+/// dropped when the channel is full. The UI re-renders on every poll cycle so
+/// losing an individual delta between polls is indistinguishable from a
+/// slightly slower refresh rate.
+#[derive(Clone, Debug)]
+pub struct EventSender {
+    inner: mpsc::Sender<Event>,
+}
+
+impl EventSender {
+    /// Wrap a standard `mpsc::Sender<Event>`.
+    pub fn new(inner: mpsc::Sender<Event>) -> Self {
+        Self { inner }
+    }
+
+    /// Clone the inner `mpsc::Sender<Event>` for use with APIs that
+    /// don't know about `EventSender` (e.g. `SubAgentBuilder`,
+    /// `InteractiveTerminalGuard`).
+    pub fn inner_clone(&self) -> mpsc::Sender<Event> {
+        self.inner.clone()
+    }
+
+    /// Try to send an event; drop non-critical events when the channel is full.
+    ///
+    /// Returns `Ok(())` if sent or dropped. Returns `Err(SendError)` if the
+    /// channel is closed (the receiver was dropped).
+    pub async fn send(&self, event: Event) -> Result<(), mpsc::error::SendError<Event>> {
+        match self.inner.try_send(event) {
+            Ok(()) => Ok(()),
+            Err(mpsc::error::TrySendError::Full(event)) => {
+                if event.is_critical() {
+                    self.inner.send(event).await
+                } else {
+                    // Drop non-critical events under backpressure.
+                    Ok(())
+                }
+            }
+            Err(mpsc::error::TrySendError::Closed(event)) => {
+                Err(mpsc::error::SendError(event))
+            }
+        }
+    }
+}
+
+/// Allow code that needs a `&mpsc::Sender<Event>` (e.g. passing to TUI
+/// components that accept the raw sender type) to deref transparently.
+impl std::ops::Deref for EventSender {
+    type Target = mpsc::Sender<Event>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
