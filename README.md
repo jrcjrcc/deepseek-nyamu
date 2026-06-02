@@ -186,6 +186,285 @@
 - **渐进式分批 summarize 被否决**：ROI 低——多次缓存断裂换摘要质量提升不划算
 - **折叠标记含 `retrieve_tool_result` 路径**：模型可通过 `retrieve_tool_result ref=<id>` 读取原始内容
 
+### 🔔 Sub-agent 通知机制（Notify 替代轮询）
+
+#### 问题
+
+`agent_eval(block=true)` 底层调用 `wait_for_result()`，该函数每 250ms 获取一次 `RwLock` 读锁检查 agent 结果。这在低并发时无感，但：
+
+- N 个 agent 同时等待 → 每秒 N×4 次读锁请求 → 锁竞争 O(n)
+- `cancel_agent` 需要写锁 → 被持续涌入的读锁饿着，等几百 ms 才能拿到
+- agent 完成后最多等 250ms 才能被感知到
+
+#### 根因
+
+```rust
+// 轮询模式（改之前）
+async fn wait_for_result(manager, agent_id) {
+    loop {
+        let guard = manager.read().await;  // 拿读锁
+        if let Some(result) = guard.get_result(agent_id) {
+            if terminal { return Ok(result) }
+        }
+        drop(guard);
+        sleep(Duration::from_millis(250)).await;  // 空等
+    }
+}
+```
+
+#### 实现
+
+用 `tokio::sync::Notify` 替代轮询——agent 完成时主动通知，零锁等待：
+
+```rust
+// SubAgent 新增字段
+notify: Arc<Notify>,
+
+// agent 完成时
+fn update_from_result(&mut self, result: AgentResult) {
+    self.result = Some(result);
+    self.notify.notify_one(); // 通知等待者
+}
+
+// 等待逻辑（改之后）
+async fn wait_for_result(manager, agent_id, timeout) {
+    let notify = { manager.read().await.agents[agent_id].notify.clone() };
+    
+    loop {
+        let notified = notify.notified();  // 先注册兴趣（防丢失）
+        
+        let guard = manager.read().await;  // 快速检查
+        if let Some(result) = guard.get_result(agent_id) {
+            if terminal { return Ok(result) }
+        }
+        drop(guard);
+        
+        tokio::time::timeout(timeout, notified).await??;
+    }
+}
+```
+
+关键设计：
+- **先注册 `.notified()` 再检查结果**——避免 agent 在检查和等待之间完成导致通知丢失
+- **`notified().await` 不拿锁**——等待期间 RwLock 完全空闲，写锁立等可取
+- **超时包裹**——与原有 timeout 语义一致，`tokio::time::timeout` 包裹 `.notified()`
+
+#### 验证
+
+- 存在 executor 的 `cancel`、`update_from_result`、`update_failed` 三处触发点均调 `notify_one()`
+- 并发 N 个 agent 的锁竞争从 O(n) 降到 O(1)
+- 子代理 112 个测试全部通过
+
+### 🕐 SSE 流式看门狗
+
+#### 问题
+
+发送流式请求后，客户端逐 chunk 读取 SSE 数据。如果服务器中途停止推送但不关闭 TCP 连接——负载均衡重启、API 网关超时、网络分区后 TCP 状态不一致——客户端永久卡在 `byte_stream.next()` 上。
+
+代码本身已有 `stream_idle_timeout()` 看门狗，但三个缺陷使其几乎无效：
+
+| 缺陷 | 值 | 后果 |
+|------|-----|------|
+| 默认超时太长 | 300s | 用户干等 5 分钟 |
+| 仅环境变量可配 | `DEEPSEEK_STREAM_IDLE_TIMEOUT_SECS` | 普通用户不知道存在此参数 |
+| keepalive 重置 timer | `:\n\n` 空 chunk 重置 `last_event_at` | 服务器可发空字节掩盖死连接 |
+
+#### 实现
+
+三个改动，分别对应上述三个缺陷：
+
+**① 默认值 300s → 60s**
+
+```rust
+// streaming.rs — 改之前
+fn stream_idle_timeout() -> Duration {
+    Duration::from_secs(env::var("DEEPSEEK_STREAM_IDLE_TIMEOUT_SECS")
+        .ok().and_then(|s| s.parse().ok()).unwrap_or(300))
+}
+
+// 改之后——加入 OnceLock 静态 + config 注入
+static STREAM_IDLE_TIMEOUT_SECS: OnceLock<u64> = OnceLock::new();
+
+pub fn set_stream_idle_timeout_secs(v: u64) {
+    let _ = STREAM_IDLE_TIMEOUT_SECS.set(v.clamp(10, 600));
+}
+
+fn stream_idle_timeout() -> Duration {
+    Duration::from_secs(
+        STREAM_IDLE_TIMEOUT_SECS.get().copied()
+            .unwrap_or(60)  // 默认 60s
+    )
+}
+```
+
+**② ConfigToml 三级注入**
+
+```toml
+# config.example.toml
+# SSE 流式空闲超时（秒）。服务器断流 N 秒无有效数据后触发重连。
+# 优先级：config.toml → DEEPSEEK_STREAM_IDLE_TIMEOUT_SECS 环境变量 → 60s
+# stream_idle_timeout_secs = 60
+```
+
+注入链路：`ConfigToml::load()` → `Config::merge_config()` → `build_engine_config()` → `set_stream_idle_timeout_secs()` → `OnceLock` 写入
+
+**③ keepalive 不重置 idle timer**
+
+```rust
+// chat.rs — 流式处理循环
+// 只对包含有效 SSE 事件的行（"data:" 开头）重置超时
+if line.starts_with("data:") || line.starts_with("event:") {
+    last_event_at = std::time::Instant::now();
+}
+// 空行（":\n\n"）或注释行不再重置 last_event_at
+```
+
+#### 超时后的行为
+
+流超时后，错误向引擎层传播。引擎通过 `should_transparently_retry_stream()`（已有逻辑）判断是否为网络层面的临时错误，是则自动重连两次，指数退避。
+
+#### 验证
+
+- 单元验证：config.toml 设置 `stream_idle_timeout_secs = 30` → `stream_idle_timeout()` 返回 30s
+- 覆盖验证：`clamp(10, 600)` 防止误设过小/过大值
+- 环境变量作为 fallback：无 config 值时读环境变量，都不设则 60s
+
+### 🔒 锁中毒防护
+
+#### 问题
+
+Rust 的 `std::sync::Mutex` 有中毒机制：持有锁的线程 panic 后，锁被标记为 poisoned，后续所有 `.lock().unwrap()` 触发连锁 panic → 进程崩溃。
+
+项目中的实际范围比预期小得多——80%+ 的锁来自 `tokio::sync::Mutex`（不中毒），只有 `std::sync::Mutex` 有风险。取样 7 个高危文件后，**只有 3 个文件共 7 处**需要修复：
+
+| 文件 | 锁对象 | 风险 |
+|------|--------|------|
+| `dream_memory.rs` (×3) | `Mutex<Option<ManifestCache>>` | RAG 缓存读写在多线程下触发 |
+| `hooks/lib.rs` (×2) | `Mutex<Vec<HookEvent>>` | 事件分发线程 panic |
+| `cli/lib.rs` (×1) | `Mutex<Vec<String>>` | CLI 启动参数收集 |
+| `config/lib.rs` (×1) | `Mutex<Vec<String>>` | 配置加载持久化 |
+
+#### 实现
+
+```rust
+// 改之前
+let cache = CACHE.lock().unwrap();
+
+// 改之后——中毒后恢复锁内容，打印警告
+let cache = CACHE.lock()
+    .unwrap_or_else(|e| {
+        tracing::warn!("state cache lock poisoned, recovering: {}", e);
+        e.into_inner()  // 返回 MutexGuard，数据可能不完整但系统不崩
+    });
+```
+
+`PoisonError::into_inner()` 返回 `MutexGuard<T>`，类型与 `unwrap()` 完全相同——所以替换是局部的，不改变周围代码。区别是 `unwrap()` 在 `Err` 时再 panic，`into_inner()` 恢复并继续。
+
+#### 修复原则
+
+- **不用 `tokio::sync::Mutex` 替换**——`std::sync::Mutex` 在这些场景中是正确的选择（短临界区、非 async 上下文），中毒机制本身是好的设计，只是在 panic 时太激进
+- **测试代码保留 `unwrap`**——test 需要 panic 来标记失败，`into_inner()` 反而隐藏错误
+- **`Mutex<()> env_lock` 无风险**——纯 semaphore，内不执行逻辑
+
+### 🧹 MCP 子进程隔离（三路保障）
+
+#### 问题
+
+MCP server 作为子进程启动（`tokio::process::Command`），正常退出时 Drop 链负责 kill：`StdioTransport::drop` → `SIGTERM` → `kill_on_drop` 兜底 SIGKILL。但 Drop 只在 Rust 控制权流转时执行，以下路径不会运行 Drop：
+
+| 退出路径 | Drop 运行？ | 后果 |
+|---------|-----------|------|
+| 正常 shutdown | ✅ | MCP 被优雅终止 |
+| panic unwind | ✅ | 同上 |
+| Ctrl+C | ✅（取决于 handler）| 同上 |
+| **panic = abort** | ❌ | **MCP 残留** |
+| **SIGKILL** | ❌ | **MCP 残留** |
+| **OOM killer** | ❌ | **MCP 残留** |
+| **process::exit** | ❌ | **MCP 残留** |
+
+残留进程占用端口 → 下次启动立即报 `EADDRINUSE` → 用户必须手动 kill。
+
+#### 实现
+
+三路保障机制，每路覆盖不同的缺口：
+
+**第一路：OS 内核级隔离（异常退出）**
+
+```rust
+pub fn spawn_protected(command: &mut Command) -> io::Result<Child> {
+    #[cfg(target_os = "windows")]
+    {
+        // Windows Job Object：父进程死时内核自动 kill 子进程
+        use windows::Win32::System::Jobs::*;
+        let job = CreateJobObjectW(None, None)?;
+        let info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION {
+            BasicLimitInformation: JOBOBJECT_BASIC_LIMIT_INFORMATION {
+                LimitFlags: JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info)?;
+        AssignProcessToJobObject(job, child_handle)?;
+    }
+    
+    #[cfg(target_family = "unix")]
+    {
+        // PR_SET_PDEATHSIG：父进程死时发 SIGTERM 给子进程
+        unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM); }
+    }
+    
+    command.spawn()
+}
+```
+
+**第二路：atexit handler（process::exit / main 返回）**
+
+```rust
+use std::sync::Mutex;
+static CHILD_PIDS: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+
+pub fn register_child(pid: u32) {
+    CHILD_PIDS.lock().unwrap().push(pid);
+}
+
+// 在 main 入口注册
+extern "C" fn cleanup() {
+    for &pid in CHILD_PIDS.lock().unwrap().iter() {
+        kill_pid(pid);  // Windows: TerminateProcess, Unix: SIGTERM
+    }
+}
+```
+
+**第三路：引擎优雅关闭**
+
+```rust
+impl Engine {
+    pub async fn shutdown(&mut self) {
+        // 反向：MCP pool → server → connection → transport
+        self.mcp_pool.shutdown().await;  // 发 SIGTERM + wait
+        // unregister_child() 在 transport drop 中调用
+    }
+}
+```
+
+三路关系：
+
+| 保障 | 覆盖路径 | 依赖 |
+|------|---------|------|
+| Job Object / PR_SET_PDEATHSIG | SIGKILL, OOM, panic=abort | 无（内核自动） |
+| atexit handler | process::exit, main 正常返回 | C 运行时 |
+| shutdown + Drop 链 | 正常退出, panic unwind, Ctrl+C | Rust drop |
+
+每路不可靠时其他路兜底，三路互补覆盖全部异常退出路径。
+
+#### 验证
+
+- Windows：CreateJobObjectW → AssignProcessToJobObject → 关闭 job handle → 验证子进程自动终止
+- Unix：prctl PR_SET_PDEATHSIG → 杀死父进程 → 验证子进程收到 SIGTERM
+- atexit：注册 handler → process::exit → 验证 handler 遍历 PID 表并 kill
+- 编译通过，不引入额外依赖
+
 ### ⌨️ `!` Bash 直通功能
 
 借鉴 Claude Code 的 `!` 前缀设计，提供 Shell 命令直通能力。
