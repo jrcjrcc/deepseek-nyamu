@@ -202,15 +202,15 @@ impl HelpView {
 /// 为 & 前缀的自定义命令提供中文短描述（绕过 localization 系统）
 pub(crate) fn command_descriptor(name: &str) -> String {
     match name {
-        "glance"     => "项目速览".into(),
-        "search"     => "文件内容搜索".into(),
-        "mark"       => "对话标记/书签".into(),
-        "plan"       => "生成并执行计划".into(),
-        "format"     => "自动格式化代码".into(),
-        "scaffold"   => "按模式生成功能结构".into(),
-        "test"       => "运行测试并分析失败".into(),
-        "implement"  => "导入代码并自动适配".into(),
-        "refactor"   => "智能重构与去重".into(),
+        "glance" => "项目速览".into(),
+        "search" => "文件内容搜索".into(),
+        "mark" => "对话标记/书签".into(),
+        "plan" => "生成并执行计划".into(),
+        "format" => "自动格式化代码".into(),
+        "scaffold" => "按模式生成功能结构".into(),
+        "test" => "运行测试并分析失败".into(),
+        "implement" => "导入代码并自动适配".into(),
+        "refactor" => "智能重构与去重".into(),
         "security-scan" | "securityscan" => "安全漏洞扫描".into(),
         "predict-issues" | "predictissues" => "预测潜在问题".into(),
         "remove-comments" | "removecomments" => "清理无用注释".into(),
@@ -224,8 +224,11 @@ pub(crate) fn command_descriptor(name: &str) -> String {
         "make-it-pretty" | "makeitpretty" => "提升代码可读性".into(),
         "session-start" | "sessionstart" => "开始记录会话".into(),
         "session-end" | "sessionend" => "总结并保存会话".into(),
-        "docs"       => "智能文档管理".into(),
+        "docs" => "智能文档管理".into(),
         "todos-to-issues" | "todostoissues" => "TODO 转 Issue 格式".into(),
+        "bak" | "beifen" | "备份" => "递归备份代码文件为 .bak".into(),
+        "rmb" | "shanbak" | "shanchu" | "删除备份" => "删除所有 .bak 备份文件".into(),
+        "￥" | "balance" | "yue" | "余额" => "查询 API 余额".into(),
         "remember" | "jizhu" | "记录" => "记录规则/约定到指令文件".into(),
         "dream" | "meng" | "记忆整合" => "启动记忆整合（Dream 四阶段流程）".into(),
         "tips" => "注入 tips.md 记忆技巧到上下文".into(),
@@ -240,7 +243,11 @@ fn build_entries(locale: Locale) -> Vec<HelpEntry> {
 
     for command in commands::COMMANDS {
         // 检查 usage 字段来判断命令前缀：& 开头的用 &，否则用 /
-        let prefix = if command.usage.starts_with('&') { "&" } else { "/" };
+        let prefix = if command.usage.starts_with('&') {
+            "&"
+        } else {
+            "/"
+        };
         let label = format!("{prefix}{}", command.name);
         // & 命令绕过 localization（MessageId 全复用 CmdHelpDescription），
         // 改用内置短描述

@@ -41,11 +41,7 @@ const SYSTEM_LAYER_MARKERS: &[(&str, &str, PromptLayerKind)] = &[
         PromptLayerKind::Static,
     ),
     ("紧凑模板", "## Compact", PromptLayerKind::Static),
-    (
-        "已配置的指令",
-        "<instructions ",
-        PromptLayerKind::Dynamic,
-    ),
+    ("已配置的指令", "<instructions ", PromptLayerKind::Dynamic),
     ("用户记忆", "## User Memory", PromptLayerKind::Dynamic),
     (
         "当前会话目标",
@@ -57,11 +53,7 @@ const SYSTEM_LAYER_MARKERS: &[(&str, &str, PromptLayerKind)] = &[
         "## Previous Session Relay",
         PromptLayerKind::Dynamic,
     ),
-    (
-        "易变工作集",
-        WORKING_SET_MARKER,
-        PromptLayerKind::Dynamic,
-    ),
+    ("易变工作集", WORKING_SET_MARKER, PromptLayerKind::Dynamic),
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -117,9 +109,7 @@ pub fn build_context_inspector_text(app: &App) -> String {
     let _ = writeln!(
         out,
         "工作区状态: {}",
-        app.workspace_context
-            .as_deref()
-            .unwrap_or("尚未采样")
+        app.workspace_context.as_deref().unwrap_or("尚未采样")
     );
 
     let _ = writeln!(out);
@@ -203,11 +193,7 @@ fn push_system_prompt_structure(out: &mut String, app: &App) {
             } else {
                 let _ = writeln!(out, "  易变工作集: 无");
             }
-            let _ = writeln!(
-                out,
-                "  总计: {} 块, ~{total_est} tokens",
-                blocks.len()
-            );
+            let _ = writeln!(out, "  总计: {} 块, ~{total_est} tokens", blocks.len());
         }
         Some(SystemPrompt::Text(text)) => {
             let layers = split_text_prompt_layers(text);
@@ -232,10 +218,7 @@ fn push_system_prompt_structure(out: &mut String, app: &App) {
                     );
                 }
             } else {
-                let _ = writeln!(
-                    out,
-                    "  单文本块 (~{total_est} tokens) [仅稳定前缀]"
-                );
+                let _ = writeln!(out, "  单文本块 (~{total_est} tokens) [仅稳定前缀]");
             }
         }
         None => {
@@ -338,10 +321,7 @@ fn push_references(out: &mut String, references: &[SessionContextReference]) {
     }
 
     if rendered == 0 {
-        let _ = writeln!(
-            out,
-            "- 尚未记录任何文件、目录或媒体引用。"
-        );
+        let _ = writeln!(out, "- 尚未记录任何文件、目录或媒体引用。");
     }
 }
 
@@ -376,10 +356,7 @@ fn push_tools(out: &mut String, app: &App) {
     if rendered == 0 {
         let _ = writeln!(out, "- 尚未记录工具活动。");
     } else {
-        let _ = writeln!(
-            out,
-            "- 打开对应卡片并按 Alt+V 查看完整详情。"
-        );
+        let _ = writeln!(out, "- 打开对应卡片并按 Alt+V 查看完整详情。");
     }
 }
 

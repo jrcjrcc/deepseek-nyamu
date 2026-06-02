@@ -3196,8 +3196,10 @@ fn thinking_state_accent(state: ThinkingVisualState) -> Color {
 
 /// Once-initialised colour depth for the terminal session. Avoids re-reading
 /// `COLORTERM` / `TERM` env vars on every frame.
+#[allow(dead_code)]
 static COLOR_DEPTH: std::sync::OnceLock<palette::ColorDepth> = std::sync::OnceLock::new();
 
+#[allow(dead_code)]
 fn cached_color_depth() -> palette::ColorDepth {
     *COLOR_DEPTH.get_or_init(palette::ColorDepth::detect)
 }

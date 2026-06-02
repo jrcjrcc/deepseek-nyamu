@@ -73,8 +73,10 @@ pub(super) struct ParallelToolResult {
 // Hold the lock guard for the duration of a tool execution.
 // The inner guards are held for RAII purposes (dropped when the guard is dropped).
 pub(super) enum ToolExecGuard<'a> {
-    Read(#[allow(dead_code)] tokio::sync::RwLockReadGuard<'a, ()>),
-    Write(#[allow(dead_code)] tokio::sync::RwLockWriteGuard<'a, ()>),
+    #[allow(dead_code)]
+    Read(tokio::sync::RwLockReadGuard<'a, ()>),
+    #[allow(dead_code)]
+    Write(tokio::sync::RwLockWriteGuard<'a, ()>),
 }
 
 // === Caller policy and errors ========================================

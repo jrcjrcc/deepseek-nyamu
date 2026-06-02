@@ -3,8 +3,8 @@
 //! 所有命令均通过 `SendMessage` 让模型执行，不写 Rust 逻辑。
 //! 每个命令是一个函数，返回格式化后的 prompt。
 
-use crate::tui::app::{App, AppAction};
 use super::CommandResult;
+use crate::tui::app::{App, AppAction};
 
 // ── &format ──────────────────────────────────────────────────
 
@@ -19,7 +19,7 @@ pub fn format(_app: &App, _arg: Option<&str>) -> CommandResult {
              4. 如果没有配置格式化工具，建议适合项目类型的格式化工\n\
              5. 格式化完成后显示变更摘要\n\
              \n\
-             不要安装新的格式化工具，只用项目已有的。"
+             不要安装新的格式化工具，只用项目已有的。",
         )),
     )
 }
@@ -59,7 +59,7 @@ pub fn test(_app: &App, _arg: Option<&str>) -> CommandResult {
                 - 提出修复方案\n\
              4. 输出测试结果摘要\n\
              \n\
-             用 `exec_shell` 执行测试命令。"
+             用 `exec_shell` 执行测试命令。",
         )),
     )
 }
@@ -155,7 +155,7 @@ pub fn predict_issues(_app: &App, _arg: Option<&str>) -> CommandResult {
                 - 预估修复时间\n\
                 - 建议预防措施\n\
              \n\
-             专注于非显而易见的深层次问题。"
+             专注于非显而易见的深层次问题。",
         )),
     )
 }
@@ -206,7 +206,7 @@ pub fn fix_imports(_app: &App, _arg: Option<&str>) -> CommandResult {
                 - 更新导入路径\n\
                 - 验证修复后的代码能通过编译（用 `exec_shell`）\n\
              \n\
-             每次修改后验证编译/语法正确性。"
+             每次修改后验证编译/语法正确性。",
         )),
     )
 }
@@ -229,7 +229,7 @@ pub fn find_todos(_app: &App, _arg: Option<&str>) -> CommandResult {
                 - 文件路径和行号\n\
                 - TODO 原文\n\
                 - 分类和紧急程度\n\
-             4. 统计总数并按目录分组"
+             4. 统计总数并按目录分组",
         )),
     )
 }
@@ -254,7 +254,7 @@ pub fn create_todos(_app: &App, _arg: Option<&str>) -> CommandResult {
                 - 参考相关代码\n\
              3. 不要添加无关或臆想的 TODO\n\
              \n\
-             用 `edit_file` 添加注释。"
+             用 `edit_file` 添加注释。",
         )),
     )
 }
@@ -306,7 +306,7 @@ pub fn understand(_app: &App, _arg: Option<&str>) -> CommandResult {
              - 模块依赖关系\n\
              - 数据流模式\n\
              - 错误处理策略\n\n\
-             输出结构化架构文档，不要空泛描述。"
+             输出结构化架构文档，不要空泛描述。",
         )),
     )
 }
@@ -359,7 +359,7 @@ pub fn contributing(_app: &App, _arg: Option<&str>) -> CommandResult {
                 - 有没有明显的技术债务\n\n\
              4. 改进建议\n\
                 - 列出最优先改进的 3-5 项\n\
-                - 每项说明理由和实施建议"
+                - 每项说明理由和实施建议",
         )),
     )
 }
@@ -401,7 +401,7 @@ pub fn session_start(_app: &App, _arg: Option<&str>) -> CommandResult {
                 - 关键约束\n\
              4. 在 `.codewhale/sessions/` 下初始化会话日志\n\
              \n\
-             用 `git_status` 和 `git_diff` 了解当前状态。"
+             用 `git_status` 和 `git_diff` 了解当前状态。",
         )),
     )
 }
@@ -419,7 +419,7 @@ pub fn session_end(_app: &App, _arg: Option<&str>) -> CommandResult {
              4. 记录有用的命令或代码片段\n\
              5. 保存到 `.codewhale/sessions/`\n\
              \n\
-             用 `write_file` 将会话日志写入 `.codewhale/sessions/`。"
+             用 `write_file` 将会话日志写入 `.codewhale/sessions/`。",
         )),
     )
 }
@@ -487,7 +487,7 @@ pub fn todos_to_issues(_app: &App, _arg: Option<&str>) -> CommandResult {
                 ```\n\
              4. 统计分类：\n\
                 - 按模块分组\n\
-                - 按优先级分组"
+                - 按优先级分组",
         )),
     )
 }

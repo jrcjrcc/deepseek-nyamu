@@ -3,22 +3,18 @@
 //! 在工作区中搜索文件内容，返回匹配最多的文件列表。
 //! 尊重 .gitignore，只搜索常见源码文件。
 
+use ignore::WalkBuilder;
 use std::collections::HashMap;
 use std::fmt::Write;
-use ignore::WalkBuilder;
 
 use super::CommandResult;
 use crate::tui::app::App;
 
 /// 搜素的源码文件扩展名
 const SOURCE_EXTENSIONS: &[&str] = &[
-    "rs", "ts", "tsx", "js", "jsx", "mjs", "cjs",
-    "py", "go", "rb", "java", "kt", "scala",
-    "c", "h", "cpp", "hpp", "cc", "hh",
-    "md", "txt", "toml", "json", "yaml", "yml", "xml",
-    "sh", "bash", "zsh", "ps1",
-    "css", "scss", "less", "html", "vue", "svelte",
-    "sql", "graphql", "proto",
+    "rs", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "rb", "java", "kt", "scala", "c",
+    "h", "cpp", "hpp", "cc", "hh", "md", "txt", "toml", "json", "yaml", "yml", "xml", "sh", "bash",
+    "zsh", "ps1", "css", "scss", "less", "html", "vue", "svelte", "sql", "graphql", "proto",
     "lock",
 ];
 
@@ -89,9 +85,7 @@ pub fn search(app: &App, arg: Option<&str>) -> CommandResult {
     }
 
     if matches.is_empty() {
-        return CommandResult::message(format!(
-            "[搜索] 在工作区中未找到包含「{query}」的文件。"
-        ));
+        return CommandResult::message(format!("[搜索] 在工作区中未找到包含「{query}」的文件。"));
     }
 
     // 按匹配行数排序（降序）
@@ -113,7 +107,12 @@ pub fn search(app: &App, arg: Option<&str>) -> CommandResult {
     }
 
     if sorted.len() > MAX_RESULTS {
-        writeln!(out, "  ... 还有 {} 个文件未显示", sorted.len() - MAX_RESULTS).unwrap();
+        writeln!(
+            out,
+            "  ... 还有 {} 个文件未显示",
+            sorted.len() - MAX_RESULTS
+        )
+        .unwrap();
     }
 
     CommandResult::message(out)

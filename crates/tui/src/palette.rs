@@ -27,6 +27,7 @@ pub const WHALE_WARNING_RGB: (u8, u8, u8) = (240, 160, 48); // #F0A030
 pub const WHALE_SUCCESS_RGB: (u8, u8, u8) = (79, 209, 197); // #4FD1C5 Seafoam
 pub const WHALE_INFO_RGB: (u8, u8, u8) = (106, 174, 242); // #6AAEF2 Sky
 pub const WHALE_BORDER_RGB: (u8, u8, u8) = (52, 88, 145); // #345891
+#[allow(dead_code)]
 pub const WHALE_REASONING_TEXT_RGB: (u8, u8, u8) = (224, 153, 72); // #E09948
 pub const WHALE_REASONING_SURFACE_RGB: (u8, u8, u8) = (42, 34, 24); // #2A2218
 pub const WHALE_REASONING_TINT_RGB: (u8, u8, u8) = (24, 36, 52); // #182434
@@ -869,52 +870,52 @@ pub const MACARON_UI_THEME: UiTheme = UiTheme {
     name: "macaron",
     mode: PaletteMode::Dark,
     // Dark navy background hierarchy
-    surface_bg:  Color::Rgb(0x0f, 0x0f, 0x17), // dark ink blue
-    panel_bg:    Color::Rgb(0x14, 0x17, 0x22), // dark navy
+    surface_bg: Color::Rgb(0x0f, 0x0f, 0x17), // dark ink blue
+    panel_bg: Color::Rgb(0x14, 0x17, 0x22),   // dark navy
     elevated_bg: Color::Rgb(0x1c, 0x20, 0x30), // navy
     composer_bg: Color::Rgb(0x14, 0x17, 0x22),
-    selection_bg:Color::Rgb(0x2a, 0x30, 0x50), // dark blue (white fg)
-    header_bg:   Color::Rgb(0x0f, 0x0f, 0x17),
-    footer_bg:   Color::Rgb(0x0f, 0x0f, 0x17),
+    selection_bg: Color::Rgb(0x2a, 0x30, 0x50), // dark blue (white fg)
+    header_bg: Color::Rgb(0x0f, 0x0f, 0x17),
+    footer_bg: Color::Rgb(0x0f, 0x0f, 0x17),
     // Text: dark→bright = thinking→output (user's rule)
-    text_dim:    Color::Rgb(0x5a, 0x6a, 0x7a), // slate blue — thinking/reasoning
-    text_hint:   Color::Rgb(0x7a, 0x9a, 0xba), // steel blue — hints
-    text_muted:  Color::Rgb(0xc4, 0x90, 0xa0), // dusty pink — muted labels
-    text_body:   Color::Rgb(0xf2, 0xde, 0xbd), // 杏仁饼香草奶油 — main output
-    text_soft:   Color::Rgb(0xf1, 0xb8, 0xf1), // 马卡龙粉 — light pink
-    border:      Color::Rgb(0xff, 0xff, 0xff), // 纯白
+    text_dim: Color::Rgb(0x5a, 0x6a, 0x7a), // slate blue — thinking/reasoning
+    text_hint: Color::Rgb(0x7a, 0x9a, 0xba), // steel blue — hints
+    text_muted: Color::Rgb(0xc4, 0x90, 0xa0), // dusty pink — muted labels
+    text_body: Color::Rgb(0xf2, 0xde, 0xbd), // 杏仁饼香草奶油 — main output
+    text_soft: Color::Rgb(0xf1, 0xb8, 0xf1), // 马卡龙粉 — light pink
+    border: Color::Rgb(0xff, 0xff, 0xff),   // 纯白
     // Accent
-    accent_primary:   Color::Rgb(0xff, 0x9b, 0x6a), // 牛奶咖啡马卡龙
+    accent_primary: Color::Rgb(0xff, 0x9b, 0x6a), // 牛奶咖啡马卡龙
     accent_secondary: Color::Rgb(0xb8, 0xd3, 0x8f), // 马卡龙抹茶奶霜
-    accent_action:    Color::Rgb(0xf1, 0x70, 0x7d), // 马卡龙草莓奶霜
+    accent_action: Color::Rgb(0xf1, 0x70, 0x7d),  // 马卡龙草莓奶霜
     // Error / destructive
-    error_fg:    Color::Rgb(0xef, 0x57, 0x67), // 马卡龙基尔Anperiaru
+    error_fg: Color::Rgb(0xef, 0x57, 0x67), // 马卡龙基尔Anperiaru
     error_hover: Color::Rgb(0xf1, 0x70, 0x7d),
-    error_surface:Color::Rgb(0x2a, 0x15, 0x15),
-    error_border:Color::Rgb(0xef, 0x57, 0x67),
-    error_text:  Color::Rgb(0xf5, 0xb0, 0xb8),
+    error_surface: Color::Rgb(0x2a, 0x15, 0x15),
+    error_border: Color::Rgb(0xef, 0x57, 0x67),
+    error_text: Color::Rgb(0xf5, 0xb0, 0xb8),
     // Status
-    warning:     Color::Rgb(0xfe, 0xcf, 0x45), // 马卡龙芒果激情
-    success:     Color::Rgb(0xdd, 0xff, 0x95), // 开心果杏仁饼
-    info:        Color::Rgb(0xb8, 0xf1, 0xed), // 杏仁饼海洋蓝
+    warning: Color::Rgb(0xfe, 0xcf, 0x45), // 马卡龙芒果激情
+    success: Color::Rgb(0xdd, 0xff, 0x95), // 开心果杏仁饼
+    info: Color::Rgb(0xb8, 0xf1, 0xed),    // 杏仁饼海洋蓝
     // Mode badges
-    mode_agent:  Color::Rgb(0xb8, 0xd3, 0x8f), // matcha
-    mode_yolo:   Color::Rgb(0xef, 0x57, 0x67), // 基尔Anperiaru — red (keep red for yolo) 
-    mode_plan:   Color::Rgb(0xff, 0x9b, 0x6a), // orange
-    mode_goal:   Color::Rgb(0xb8, 0xf1, 0xed), // ocean
+    mode_agent: Color::Rgb(0xb8, 0xd3, 0x8f), // matcha
+    mode_yolo: Color::Rgb(0xef, 0x57, 0x67),  // 基尔Anperiaru — red (keep red for yolo)
+    mode_plan: Color::Rgb(0xff, 0x9b, 0x6a),  // orange
+    mode_goal: Color::Rgb(0xb8, 0xf1, 0xed),  // ocean
     // Footer status
-    status_ready:   Color::Rgb(0x5a, 0x68, 0x78), // slate blue
+    status_ready: Color::Rgb(0x5a, 0x68, 0x78), // slate blue
     status_working: Color::Rgb(0xf1, 0xb8, 0xf1), // 马卡龙粉 — light pink
     status_warning: Color::Rgb(0xfe, 0xcf, 0x45),
     // Diff
-    diff_added_fg:   Color::Rgb(0xb8, 0xd3, 0x8f),
+    diff_added_fg: Color::Rgb(0xb8, 0xd3, 0x8f),
     diff_deleted_fg: Color::Rgb(0xef, 0x57, 0x67),
-    diff_added_bg:   Color::Rgb(0x1a, 0x2a, 0x1a),
+    diff_added_bg: Color::Rgb(0x1a, 0x2a, 0x1a),
     diff_deleted_bg: Color::Rgb(0x2a, 0x15, 0x15),
     // Tool
     tool_running: Color::Rgb(0xb8, 0xf1, 0xed), // 杏仁饼海洋蓝 — ocean blue
     tool_success: Color::Rgb(0x5a, 0x68, 0x78), // slate blue
-    tool_failed:  Color::Rgb(0xc8, 0x6f, 0x67), // 覆盆子马卡龙
+    tool_failed: Color::Rgb(0xc8, 0x6f, 0x67),  // 覆盆子马卡龙
 };
 
 /// Stable identifiers for the named themes the user can select. `System`
@@ -1253,7 +1254,11 @@ const fn theme_diff_deleted_bg(ui: &UiTheme) -> Color {
 pub const fn theme_remap_active(theme: ThemeId) -> bool {
     matches!(
         theme,
-        ThemeId::CatppuccinMocha | ThemeId::TokyoNight | ThemeId::Dracula | ThemeId::GruvboxDark | ThemeId::Macaron
+        ThemeId::CatppuccinMocha
+            | ThemeId::TokyoNight
+            | ThemeId::Dracula
+            | ThemeId::GruvboxDark
+            | ThemeId::Macaron
     )
 }
 
@@ -1596,6 +1601,7 @@ pub fn blend(fg: Color, bg: Color, alpha: f32) -> Color {
 /// background colors faithfully. ANSI-16 terminals disable the tint because
 /// the nearest named background is too coarse for this subtle treatment.
 #[must_use]
+#[allow(dead_code)]
 pub fn reasoning_surface_tint(depth: ColorDepth) -> Option<Color> {
     match depth {
         ColorDepth::Ansi16 => None,
@@ -1741,16 +1747,15 @@ fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
 mod tests {
     use super::{
         ACCENT_REASONING_LIVE, ColorDepth, DEEPSEEK_INK, DEEPSEEK_RED, DEEPSEEK_SKY,
-        DEEPSEEK_SLATE, GRAYSCALE_BORDER, GRAYSCALE_PANEL, GRAYSCALE_REASONING,
-        GRAYSCALE_SURFACE, GRAYSCALE_TEXT_BODY, GRAYSCALE_TEXT_HINT, GRAYSCALE_TEXT_SOFT,
-        GRAYSCALE_UI_THEME, LIGHT_BORDER, LIGHT_ELEVATED, LIGHT_PANEL, LIGHT_REASONING,
-        LIGHT_SURFACE, LIGHT_TEXT_BODY, LIGHT_TEXT_HINT, LIGHT_UI_THEME, PaletteMode,
-        SURFACE_REASONING, SURFACE_REASONING_TINT, TEXT_BODY, TEXT_HINT, TEXT_REASONING,
-        TEXT_TOOL_OUTPUT, UI_THEME, WHALE_REASONING_TEXT_RGB, WHALE_REASONING_TINT_RGB,
-        WHALE_TEXT_BODY_RGB, adapt_bg, adapt_bg_for_palette_mode, adapt_color,
-        adapt_fg_for_palette_mode, blend, luma, nearest_ansi16, normalize_hex_rgb_color,
-        normalize_theme_name, parse_hex_rgb_color, pulse_brightness, reasoning_surface_tint,
-        rgb_to_ansi256, theme_label_for_mode, ui_theme_from_settings,
+        DEEPSEEK_SLATE, GRAYSCALE_BORDER, GRAYSCALE_PANEL, GRAYSCALE_REASONING, GRAYSCALE_SURFACE,
+        GRAYSCALE_TEXT_BODY, GRAYSCALE_TEXT_HINT, GRAYSCALE_TEXT_SOFT, GRAYSCALE_UI_THEME,
+        LIGHT_BORDER, LIGHT_ELEVATED, LIGHT_PANEL, LIGHT_REASONING, LIGHT_SURFACE, LIGHT_TEXT_BODY,
+        LIGHT_TEXT_HINT, LIGHT_UI_THEME, PaletteMode, SURFACE_REASONING, SURFACE_REASONING_TINT,
+        TEXT_BODY, TEXT_HINT, TEXT_REASONING, TEXT_TOOL_OUTPUT, UI_THEME, WHALE_REASONING_TEXT_RGB,
+        WHALE_REASONING_TINT_RGB, WHALE_TEXT_BODY_RGB, adapt_bg, adapt_bg_for_palette_mode,
+        adapt_color, adapt_fg_for_palette_mode, blend, luma, nearest_ansi16,
+        normalize_hex_rgb_color, normalize_theme_name, parse_hex_rgb_color, pulse_brightness,
+        reasoning_surface_tint, rgb_to_ansi256, theme_label_for_mode, ui_theme_from_settings,
     };
     use ratatui::style::Color;
 

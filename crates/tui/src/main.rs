@@ -18,6 +18,7 @@ mod audit;
 mod auto_reasoning;
 mod automation_manager;
 mod child_env;
+mod cli_commands;
 mod client;
 mod command_safety;
 mod commands;
@@ -79,7 +80,6 @@ mod utils;
 mod vision;
 mod working_set;
 mod workspace_trust;
-mod cli_commands;
 
 use crate::config::{Config, DEFAULT_TEXT_MODEL, MAX_SUBAGENTS, effective_home_dir};
 use crate::eval::{EvalHarness, EvalHarnessConfig, ScenarioStepKind};
@@ -137,9 +137,7 @@ fn relocate_to_windows_terminal() {
     let args: Vec<String> = std::env::args().collect();
 
     let mut cmd = std::process::Command::new("wt.exe");
-    cmd.arg("--window").arg("0")
-       .arg("-d").arg(&cwd)
-       .arg(&exe);
+    cmd.arg("--window").arg("0").arg("-d").arg(&cwd).arg(&exe);
     for arg in args.iter().skip(1) {
         cmd.arg(arg);
     }
@@ -3651,6 +3649,7 @@ fn load_config_from_cli(cli: &Cli) -> Result<Config> {
     Ok(config)
 }
 
+#[allow(dead_code)]
 fn read_api_key_from_stdin() -> Result<String> {
     let mut stdin = io::stdin();
     if stdin.is_terminal() {
@@ -3665,6 +3664,7 @@ fn read_api_key_from_stdin() -> Result<String> {
     Ok(api_key)
 }
 
+#[allow(dead_code)]
 fn run_login(api_key: Option<String>) -> Result<()> {
     let api_key = match api_key {
         Some(key) => key,
@@ -3675,6 +3675,7 @@ fn run_login(api_key: Option<String>) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn run_logout() -> Result<()> {
     config::clear_api_key()?;
     println!("Cleared saved API key.");
@@ -4625,8 +4626,8 @@ fn should_use_mouse_capture_with(
 /// `~/.deepseek/config.toml` or `--mouse-capture`.
 fn default_mouse_capture_enabled(
     terminal_emulator: Option<&str>,
-    wt_session: Option<&str>,
-    conemu_pid: Option<&str>,
+    _wt_session: Option<&str>,
+    _conemu_pid: Option<&str>,
 ) -> bool {
     if cfg!(windows) {
         // Windows 11 起默认终端已是 Windows Terminal，旧版 conhost 用户

@@ -80,10 +80,7 @@ impl Engine {
             self.refresh_system_prompt(mode);
 
             if turn.at_max_steps() {
-                let _ = self
-                    .tx_event
-                    .send(Event::status("已达到最大步骤数"))
-                    .await;
+                let _ = self.tx_event.send(Event::status("已达到最大步骤数")).await;
                 break;
             }
 
@@ -281,9 +278,11 @@ impl Engine {
                 }
             }
 
+            let mut compacted_messages = self.messages_with_turn_metadata();
+            microcompact_tool_results(&mut compacted_messages);
             let request = MessageRequest {
                 model: self.session.model.clone(),
-                messages: self.messages_with_turn_metadata(),
+                messages: compacted_messages,
                 max_tokens: effective_max_output_tokens(&self.session.model),
                 system: self.session.system_prompt.clone(),
                 tools: active_tools.clone(),
@@ -2380,7 +2379,97 @@ mod tests {
         assert_eq!(
             resolve_auto_effort(Some("auto"), &messages),
             Some("high".to_string()),
-            "auto thinking should classify the user request, not stored metadata"
+                    "auto thinking should classify the user request, not stored metadata"
         );
+    }
+}
+
+// ── Time‑aware microcompact ────────────────────────────────────────────────
+//
+// Scans messages before they go to the API wire. When many tool‑result blocks
+// have accumulated from earlier turns, the oldest ones are replaced with a
+// short placeholder.  This shrinks the request body without modifying any
+// persisted session state.  The server‑side prefix cache is broken from the
+// first replacement onward, but the shorter body means the next cache‑warming
+// request is cheaper and faster.
+//
+// Modeled after Claude Code's microcompact pipeline (time‑based + cached MC).
+// Since DeepSeek does not expose a `cache_edits` API, the cached‑MC layer is
+// not portable; this module provides the time‑based layer.
+
+/// Tool names whose results will be compacted when they become old.
+const COMPACTABLE_TOOL_PREFIXES: &[&str] = &[
+    "read_file",
+    "exec_shell",
+    "grep_files",
+    "file_search",
+    "web_search",
+    "fetch_url",
+    "list_dir",
+];
+
+/// Keep this many most‑recent compactable tool results; older ones get cleared.
+const KEEP_RECENT_TOOL_RESULTS: usize = 5;
+
+/// Minimum content byte count to bother clearing (tiny results are noise).
+const MIN_CLEAR_CONTENT_LEN: usize = 200;
+
+/// Replace the content of old tool‑result blocks with a short placeholder
+/// so the wire body is smaller for the next cache‑warming request.
+///
+/// Operates on the *wire copy* of messages — persisted session state is
+/// never touched.  The server prefix‑cache will break from the first
+/// replaced block onward, but when many old tool results exist the
+/// cache was likely already cold or will benefit more from the smaller
+/// body than it loses from the displacement.
+fn microcompact_tool_results(messages: &mut Vec<Message>) {
+    // 1. Collect compactable tool_use IDs in conversation order.
+    let tool_ids: Vec<String> = messages
+        .iter()
+        .filter(|m| m.role == "assistant")
+        .flat_map(|m| &m.content)
+        .filter_map(|block| {
+            if let ContentBlock::ToolUse { id, name, .. } = block {
+                if COMPACTABLE_TOOL_PREFIXES.contains(&name.as_str()) {
+                    return Some(id.clone());
+                }
+            }
+            None
+        })
+        .collect();
+
+    if tool_ids.len() <= KEEP_RECENT_TOOL_RESULTS {
+        return;
+    }
+
+    // 2. Build a set of IDs to keep (the most recent N).
+    let keep: std::collections::HashSet<&str> = tool_ids
+        .iter()
+        .skip(tool_ids.len().saturating_sub(KEEP_RECENT_TOOL_RESULTS))
+        .map(|s| s.as_str())
+        .collect();
+
+    // 3. Clear content for tool results not in the keep‑set.
+    for message in messages.iter_mut() {
+        if message.role != "user" {
+            continue;
+        }
+        for block in &mut message.content {
+            if let ContentBlock::ToolResult {
+                tool_use_id,
+                content,
+                ..
+            } = block
+            {
+                if content.len() > MIN_CLEAR_CONTENT_LEN && !keep.contains(tool_use_id.as_str()) {
+                    let placeholder = format!(
+                        "[内容已折叠 — 原始 {} 字符]\n[spillover: 可用 retrieve_tool_result ref={} 查阅原始内容]",
+                        content.len(),
+                        tool_use_id,
+                    );
+                    *content = placeholder;
+                }
+            }
+        }
     }
 }

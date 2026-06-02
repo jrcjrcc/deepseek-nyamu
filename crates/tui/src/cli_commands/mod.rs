@@ -329,7 +329,11 @@ fn clear_provider_api_key_from_config(store: &mut ConfigStore, provider: Provide
     }
 }
 
-fn write_provider_api_key_to_keyring(secrets: &Secrets, provider: ProviderKind, api_key: &str) -> bool {
+fn write_provider_api_key_to_keyring(
+    secrets: &Secrets,
+    provider: ProviderKind,
+    api_key: &str,
+) -> bool {
     secrets.set(provider_slot(provider), api_key).is_ok()
 }
 
@@ -411,6 +415,7 @@ fn yes_no(b: bool) -> &'static str {
     if b { "yes" } else { "no " }
 }
 
+#[allow(dead_code)]
 fn keyring_status_short(state: Option<bool>) -> &'static str {
     match state {
         Some(true) => "yes",
@@ -421,7 +426,11 @@ fn keyring_status_short(state: Option<bool>) -> &'static str {
 
 // ── Auth helpers for the List command ──────────────────────────────────
 
-fn provider_auth_state<'a>(store: &'a ConfigStore, secrets: &'a Secrets, provider: ProviderKind) -> ProviderAuthState<'a> {
+fn provider_auth_state<'a>(
+    store: &'a ConfigStore,
+    secrets: &'a Secrets,
+    provider: ProviderKind,
+) -> ProviderAuthState<'a> {
     ProviderAuthState {
         name: provider.as_str(),
         config: provider_config_set(store, provider),
@@ -475,8 +484,11 @@ fn persist_mcp_server_definitions(
     store: &mut ConfigStore,
     definitions: &[McpServerDefinition],
 ) -> Result<()> {
-    let encoded = serde_json::to_string(definitions).context("failed to encode MCP server definitions")?;
-    store.config.set_value(MCP_SERVER_DEFINITIONS_KEY, &encoded)?;
+    let encoded =
+        serde_json::to_string(definitions).context("failed to encode MCP server definitions")?;
+    store
+        .config
+        .set_value(MCP_SERVER_DEFINITIONS_KEY, &encoded)?;
     store.save()
 }
 
@@ -513,9 +525,15 @@ fn prompt_api_key(slot: &str) -> Result<String> {
 
 // ── Login ──────────────────────────────────────────────────────────────
 
-pub fn run_login_command(store: &mut ConfigStore, provider_override: Option<ProviderArg>, api_key: Option<String>) -> Result<()> {
+pub fn run_login_command(
+    store: &mut ConfigStore,
+    provider_override: Option<ProviderArg>,
+    api_key: Option<String>,
+) -> Result<()> {
     let secrets = Secrets::auto_detect();
-    let provider: ProviderKind = provider_override.map(Into::into).unwrap_or(ProviderKind::Deepseek);
+    let provider: ProviderKind = provider_override
+        .map(Into::into)
+        .unwrap_or(ProviderKind::Deepseek);
     store.config.provider = provider;
 
     let api_key = match api_key {
@@ -566,7 +584,11 @@ pub fn run_auth_command(store: &mut ConfigStore, command: AuthCommand) -> Result
             }
             Ok(())
         }
-        AuthCommand::Set { provider, api_key, api_key_stdin } => {
+        AuthCommand::Set {
+            provider,
+            api_key,
+            api_key_stdin,
+        } => {
             let provider: ProviderKind = provider.into();
             let slot = provider_slot(provider);
             if provider == ProviderKind::Ollama && api_key.is_none() && !api_key_stdin {
@@ -576,7 +598,10 @@ pub fn run_auth_command(store: &mut ConfigStore, command: AuthCommand) -> Result
                     provider_cfg.base_url = Some("http://localhost:11434/v1".to_string());
                 }
                 store.save()?;
-                println!("configured {slot} provider in {} (API key optional)", store.path().display());
+                println!(
+                    "configured {slot} provider in {} (API key optional)",
+                    store.path().display()
+                );
                 return Ok(());
             }
             let api_key = match (api_key, api_key_stdin) {
@@ -588,7 +613,11 @@ pub fn run_auth_command(store: &mut ConfigStore, command: AuthCommand) -> Result
             let keyring_saved = write_provider_api_key_to_keyring(&secrets, provider, &api_key);
             store.save()?;
             if keyring_saved {
-                println!("saved API key for {slot} to {} and {}", store.path().display(), secrets.backend_name());
+                println!(
+                    "saved API key for {slot} to {} and {}",
+                    store.path().display(),
+                    secrets.backend_name()
+                );
             } else {
                 println!("saved API key for {slot} to {}", store.path().display());
             }
@@ -600,10 +629,15 @@ pub fn run_auth_command(store: &mut ConfigStore, command: AuthCommand) -> Result
             let in_file = provider_config_set(store, provider);
             let in_keyring = !in_file && provider_keyring_set(&secrets, provider);
             let in_env = provider_env_set(provider);
-            let source = if in_file { Some("config-file") }
-                else if in_keyring { Some("secret-store") }
-                else if in_env { Some("env") }
-                else { None };
+            let source = if in_file {
+                Some("config-file")
+            } else if in_keyring {
+                Some("secret-store")
+            } else if in_env {
+                Some("env")
+            } else {
+                None
+            };
             match source {
                 Some(source) => println!("{slot}: set (source: {source})"),
                 None => println!("{slot}: not set"),
@@ -620,7 +654,10 @@ pub fn run_auth_command(store: &mut ConfigStore, command: AuthCommand) -> Result
             Ok(())
         }
         AuthCommand::List => {
-            println!("{:<13} {:<6} {:<6} {:<6} active", "provider", "config", "store", "env");
+            println!(
+                "{:<13} {:<6} {:<6} {:<6} active",
+                "provider", "config", "store", "env"
+            );
             for provider in &PROVIDER_LIST {
                 let state = provider_auth_state(store, &secrets, *provider);
                 println!(
@@ -644,7 +681,9 @@ pub fn run_auth_command(store: &mut ConfigStore, command: AuthCommand) -> Result
                 match (config_value, keyring_value.clone()) {
                     (Some(key), None) => {
                         if dry_run {
-                            println!("would migrate {slot} (key present in config, not in secret store)");
+                            println!(
+                                "would migrate {slot} (key present in config, not in secret store)"
+                            );
                         } else {
                             // store says set -> the config file has the key
                             write_provider_api_key_to_keyring(&secrets, *provider, key);
@@ -654,7 +693,9 @@ pub fn run_auth_command(store: &mut ConfigStore, command: AuthCommand) -> Result
                     }
                     (None, Some(ref kv)) => {
                         if dry_run {
-                            println!("would restore {slot} (key in secret store, config slot empty)");
+                            println!(
+                                "would restore {slot} (key in secret store, config slot empty)"
+                            );
                         } else {
                             write_provider_api_key_to_config(store, *provider, kv);
                             println!("restored {slot}");
@@ -702,8 +743,8 @@ pub fn run_config_command(store: &mut ConfigStore, command: ConfigCommand) -> Re
             Ok(())
         }
         ConfigCommand::List => {
-            let raw = toml::to_string_pretty(&store.config)
-                .context("failed to serialize config")?;
+            let raw =
+                toml::to_string_pretty(&store.config).context("failed to serialize config")?;
             println!("{raw}");
             Ok(())
         }
@@ -735,7 +776,8 @@ pub fn run_model_command(command: ModelCommand) -> Result<()> {
             let resolved = registry.resolve(model_name, provider.map(ProviderKind::from));
             println!(
                 "{} ({})",
-                resolved.resolved.id, resolved.resolved.provider.as_str()
+                resolved.resolved.id,
+                resolved.resolved.provider.as_str()
             );
             Ok(())
         }
@@ -756,7 +798,10 @@ pub fn run_thread_command(command: ThreadCommand) -> Result<()> {
                 println!(
                     "{} | {} | {} | {}",
                     thread.id,
-                    thread.name.clone().unwrap_or_else(|| "(unnamed)".to_string()),
+                    thread
+                        .name
+                        .clone()
+                        .unwrap_or_else(|| "(unnamed)".to_string()),
                     thread.model_provider,
                     thread.cwd.display()
                 );
@@ -800,13 +845,16 @@ pub fn run_thread_command(command: ThreadCommand) -> Result<()> {
         }
         ThreadCommand::Resume { .. } | ThreadCommand::Fork { .. } => {
             // These should be handled by the interactive TUI, not here
-            bail!("Use `codewhale resume` or `codewhale fork` directly (not `codewhale thread resume/fork`)");
+            bail!(
+                "Use `codewhale resume` or `codewhale fork` directly (not `codewhale thread resume/fork`)"
+            );
         }
     }
 }
 
 // ── Sandbox ────────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 pub fn run_sandbox_check_command(command_str: String) -> Result<()> {
     use codewhale_execpolicy::{AskForApproval, ExecPolicyContext, ExecPolicyEngine};
     let engine = ExecPolicyEngine::new(Vec::new(), vec!["rm -rf".to_string()]);
@@ -833,14 +881,21 @@ pub fn run_app_server_command(args: AppServerArgs) -> Result<()> {
     }
     let listen: SocketAddr = format!("{}:{}", args.host, args.port)
         .parse()
-        .with_context(|| format!("invalid app-server listen address {}:{}", args.host, args.port))?;
-    runtime.block_on(codewhale_app_server::run(codewhale_app_server::AppServerOptions {
-        listen,
-        config_path: args.config,
-        auth_token: args.auth_token.or_else(app_server_token_from_env),
-        insecure_no_auth: args.insecure_no_auth,
-        cors_origins: args.cors_origin,
-    }))
+        .with_context(|| {
+            format!(
+                "invalid app-server listen address {}:{}",
+                args.host, args.port
+            )
+        })?;
+    runtime.block_on(codewhale_app_server::run(
+        codewhale_app_server::AppServerOptions {
+            listen,
+            config_path: args.config,
+            auth_token: args.auth_token.or_else(app_server_token_from_env),
+            insecure_no_auth: args.insecure_no_auth,
+            cors_origins: args.cors_origin,
+        },
+    ))
 }
 
 fn app_server_token_from_env() -> Option<String> {

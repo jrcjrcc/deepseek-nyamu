@@ -1803,13 +1803,14 @@ impl ToolSpec for ExecShellTool {
         let command = required_str(&input, "command")?;
         // ── Command validation (defense-in-depth) ────────────────────────
         if command.contains('\0') {
-            return Ok(ToolResult::error(
-                "BLOCKED: command contains null byte".to_string(),
-            )
-            .with_metadata(json!({
-                "safety_level": "blocked",
-                "reason": "null byte in command",
-            })));
+            return Ok(
+                ToolResult::error("BLOCKED: command contains null byte".to_string()).with_metadata(
+                    json!({
+                        "safety_level": "blocked",
+                        "reason": "null byte in command",
+                    }),
+                ),
+            );
         }
         if command.len() > 100_000 {
             return Ok(ToolResult::error(

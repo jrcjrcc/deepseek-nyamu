@@ -92,7 +92,10 @@ impl ConsolidationLock {
     pub fn read_pid(memory_dir: &Path) -> Option<u32> {
         let lock_path = memory_dir.join(LOCK_FILE);
         let mut buf = String::new();
-        fs::File::open(&lock_path).ok()?.read_to_string(&mut buf).ok()?;
+        fs::File::open(&lock_path)
+            .ok()?
+            .read_to_string(&mut buf)
+            .ok()?;
         buf.lines().next()?.parse().ok()
     }
 }
@@ -143,12 +146,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
 
         // First acquire succeeds — hold the lock
-        let lock = match ConsolidationLock::try_acquire(dir.path(), Duration::from_secs(3600))
-            .unwrap()
-        {
-            LockStatus::Acquired(l) => l,
-            LockStatus::Held => panic!("expected Acquired"),
-        };
+        let lock =
+            match ConsolidationLock::try_acquire(dir.path(), Duration::from_secs(3600)).unwrap() {
+                LockStatus::Acquired(l) => l,
+                LockStatus::Held => panic!("expected Acquired"),
+            };
 
         // Lock file exists while we hold it
         assert!(dir.path().join(LOCK_FILE).exists());
@@ -162,12 +164,11 @@ mod tests {
     fn test_held_when_lock_active() {
         let dir = tempfile::tempdir().unwrap();
 
-        let _lock = match ConsolidationLock::try_acquire(dir.path(), Duration::from_secs(3600))
-            .unwrap()
-        {
-            LockStatus::Acquired(l) => l,
-            LockStatus::Held => panic!("expected Acquired"),
-        };
+        let _lock =
+            match ConsolidationLock::try_acquire(dir.path(), Duration::from_secs(3600)).unwrap() {
+                LockStatus::Acquired(l) => l,
+                LockStatus::Held => panic!("expected Acquired"),
+            };
 
         // Second attempt should be Held
         match ConsolidationLock::try_acquire(dir.path(), Duration::from_secs(3600)).unwrap() {

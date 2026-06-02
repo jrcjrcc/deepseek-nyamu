@@ -1837,10 +1837,9 @@ async fn run_event_loop(
                             "Sub-agent {id} completed: {}",
                             summarize_tool_output(&result)
                         ));
-                        let should_recapture_terminal =
-                            !has_other_running_subagents
-                                && app.use_alt_screen
-                                && terminal_paused_at.is_some();
+                        let should_recapture_terminal = !has_other_running_subagents
+                            && app.use_alt_screen
+                            && terminal_paused_at.is_some();
                         if !has_other_running_subagents
                             && let Some((method, threshold, include_summary)) =
                                 notifications::settings(config)
@@ -3021,7 +3020,14 @@ async fn run_event_loop(
                             app.disarm_quit();
                         }
                         CtrlCDisposition::ConfirmExit => {
-                            let _ = engine_handle.send(Op::Shutdown).await;
+                            // try_send 避免在引擎 channel 积满时阻塞事件循环。
+                            // 若 channel 拥堵，后台任务完成阻塞式发送，TUI 先退出。
+                            if engine_handle.tx_op.try_send(Op::Shutdown).is_err() {
+                                let tx = engine_handle.tx_op.clone();
+                                tokio::spawn(async move {
+                                    let _ = tx.send(Op::Shutdown).await;
+                                });
+                            }
                             return Ok(());
                         }
                         CtrlCDisposition::ArmExit => {
@@ -3032,7 +3038,12 @@ async fn run_event_loop(
                 KeyCode::Char('d')
                     if key.modifiers.contains(KeyModifiers::CONTROL) && app.input.is_empty() =>
                 {
-                    let _ = engine_handle.send(Op::Shutdown).await;
+                    if engine_handle.tx_op.try_send(Op::Shutdown).is_err() {
+                        let tx = engine_handle.tx_op.clone();
+                        tokio::spawn(async move {
+                            let _ = tx.send(Op::Shutdown).await;
+                        });
+                    }
                     return Ok(());
                 }
                 // Vim composer mode: Esc from Insert/Visual → Normal.
@@ -3399,6 +3410,13 @@ async fn run_event_loop(
                     }
                     if let Some(input) = app.handle_composer_enter() {
                         if handle_plan_choice(app, config, &engine_handle, &input).await? {
+                            continue;
+                        }
+                        // `!cmd` / `! cmd` bash pass-through — runs a shell
+                        // command directly and shows the output in the
+                        // conversation without involving the model.
+                        if let Some(cmd) = input.strip_prefix('!').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                            execute_bash_passthrough(app, cmd).await?;
                             continue;
                         }
                         // `# foo` quick-add (#492) — when memory is enabled,
@@ -5380,6 +5398,80 @@ async fn execute_command_input(
         result,
     )
     .await
+}
+
+/// Execute a shell command via `! cmd` pass-through.
+/// Runs the command synchronously, captures output, and renders
+/// both the command prompt and its result into the conversation history
+/// without involving the model.
+async fn execute_bash_passthrough(app: &mut App, cmd: &str) -> Result<()> {
+    use crate::tui::history::HistoryCell;
+    let cmd_owned = cmd.to_string();
+
+    // Show the command prompt in history.
+    app.history.push(HistoryCell::User {
+        content: format!("$ {cmd_owned}"),
+    });
+
+    // Use the app's workspace as working directory when available.
+    let cwd = if app.workspace.as_os_str().is_empty() {
+        None
+    } else {
+        Some(app.workspace.clone())
+    };
+
+    // Spawn a blocking OS process — this is a short-lived foreground
+    // command so `spawn_blocking` is the right fit.
+    let output = tokio::task::spawn_blocking(move || {
+        let shell = if cfg!(windows) { "cmd" } else { "sh" };
+        let flag = if cfg!(windows) { "/C" } else { "-c" };
+        let mut cmd = std::process::Command::new(shell);
+        cmd.args([flag, &cmd_owned]);
+        if let Some(ref dir) = cwd {
+            cmd.current_dir(dir);
+        }
+        cmd.output()
+    })
+    .await??;
+
+    // Build the result text from stdout / stderr / exit code.
+    let mut result = String::new();
+    if !output.stdout.is_empty() {
+        result.push_str(&String::from_utf8_lossy(&output.stdout));
+    }
+    if !output.stderr.is_empty() {
+        if !result.is_empty() {
+            result.push('\n');
+        }
+        result.push_str(&String::from_utf8_lossy(&output.stderr));
+    }
+    if !output.status.success() {
+        if !result.is_empty() {
+            result.push('\n');
+        }
+        let code = output.status.code().map_or("signal".into(), |c| c.to_string());
+        result.push_str(&format!("[exit code: {code}]"));
+    }
+    if result.is_empty() {
+        result = "(no output)".to_string();
+    }
+
+    // Cap very long output so the TUI stays responsive.
+    const MAX_OUTPUT_CHARS: usize = 10_000;
+    let char_count = result.chars().count();
+    if char_count > MAX_OUTPUT_CHARS {
+        let truncated: String = result.chars().take(MAX_OUTPUT_CHARS).collect();
+        result = format!("{truncated}\n... [输出截断，共 {char_count} 字符]");
+    }
+
+    // Render the result as an assistant message.
+    app.history.push(HistoryCell::Assistant {
+        content: result,
+        streaming: false,
+    });
+
+    app.needs_redraw = true;
+    Ok(())
 }
 
 async fn steer_user_message(

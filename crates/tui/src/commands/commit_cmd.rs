@@ -23,7 +23,7 @@ pub fn commit(_app: &App, arg: Option<&str>) -> CommandResult {
          - 不要 --amend，除非用户明确要求\n\
          - 不要提交 .env 等敏感文件\n\
          - 不要创建空 commit\n\
-         - 不要用 -i 交互模式\n"
+         - 不要用 -i 交互模式\n",
     );
 
     if let Some(msg) = extra {

@@ -339,8 +339,8 @@ impl Settings {
             }
         }
 
-        let config_dir = dirs::config_dir()
-            .context("Failed to resolve config directory: not found.")?;
+        let config_dir =
+            dirs::config_dir().context("Failed to resolve config directory: not found.")?;
 
         // Prefer codewhale/settings.toml; fall back to deepseek/settings.toml
         // for users who haven't migrated yet.
@@ -355,7 +355,11 @@ impl Settings {
                 let _ = std::fs::create_dir_all(parent);
             }
             if std::fs::copy(&legacy, &primary).is_ok() {
-                tracing::info!("Migrated settings from {} to {}", legacy.display(), primary.display());
+                tracing::info!(
+                    "Migrated settings from {} to {}",
+                    legacy.display(),
+                    primary.display()
+                );
                 return Ok(primary);
             }
             // Copy failed; fall back to legacy.

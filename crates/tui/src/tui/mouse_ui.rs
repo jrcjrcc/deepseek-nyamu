@@ -1,3 +1,9 @@
+//! Mouse-event dispatch: click, scroll, drag, and hover handlers.
+//!
+//! Routes mouse input from `crossterm` to the appropriate TUI component
+//! (chat history, command palette, context menu, sidebar, help overlay).
+//! Also manages loading-state motion suppression and selection autoscroll.
+
 use std::time::{Duration, Instant};
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -514,7 +520,9 @@ pub(crate) fn build_context_menu_entries(app: &App, mouse: MouseEvent) -> Vec<Co
     if !app.collapsed_cells.is_empty() {
         let count = app.collapsed_cells.len();
         entries.push(ContextMenuEntry {
-            label: app.tr(MessageId::CtxShowHidden).replace("{count}", &count.to_string()),
+            label: app
+                .tr(MessageId::CtxShowHidden)
+                .replace("{count}", &count.to_string()),
             description: app.tr(MessageId::CtxShowHiddenDesc).to_string(),
             action: ContextMenuAction::ShowAllHidden,
         });

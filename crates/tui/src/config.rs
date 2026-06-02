@@ -18,7 +18,7 @@ use crate::audit::log_sensitive_event;
 use crate::features::{Features, FeaturesToml, is_known_feature_key};
 use crate::hooks::HooksConfig;
 
-pub const DEFAULT_MAX_SUBAGENTS: usize = 10;
+pub const DEFAULT_MAX_SUBAGENTS: usize = 20;
 pub const MAX_SUBAGENTS: usize = 20;
 /// Default per-step DeepSeek API timeout for sub-agent requests, in seconds.
 /// Matches the legacy hardcoded value so existing configs keep their old
@@ -32,7 +32,7 @@ pub const MIN_SUBAGENT_API_TIMEOUT_SECS: u64 = 1;
 /// keeps a misconfigured per-step timeout from masking real model/network
 /// hangs forever.
 pub const MAX_SUBAGENT_API_TIMEOUT_SECS: u64 = 1800;
-pub const DEFAULT_TEXT_MODEL: &str = "deepseek-v4-pro";
+pub const DEFAULT_TEXT_MODEL: &str = "deepseek-v4-flash";
 pub const DEFAULT_DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com/beta";
 pub const DEFAULT_NVIDIA_NIM_MODEL: &str = "deepseek-ai/deepseek-v4-pro";
 pub const DEFAULT_NVIDIA_NIM_FLASH_MODEL: &str = "deepseek-ai/deepseek-v4-flash";
@@ -4709,9 +4709,9 @@ mod tests {
     }
 
     #[test]
-    fn max_subagents_defaults_to_ten() {
+    fn max_subagents_defaults_to_twenty() {
         assert_eq!(Config::default().max_subagents(), DEFAULT_MAX_SUBAGENTS);
-        assert_eq!(DEFAULT_MAX_SUBAGENTS, 10);
+        assert_eq!(DEFAULT_MAX_SUBAGENTS, 20);
     }
 
     #[test]

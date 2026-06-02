@@ -12,6 +12,10 @@
 | 🚀 **指令系统增强** | `&dream`/`&tips`/`&traps`/`&update` 记忆与实用指令，`##` 快捷记录，三入口统一描述 |
 | 🌏 **完整汉化** | 引擎状态栏、思考标签、侧栏、工具面板标签全覆盖（280+ MessageId） |
 | 🎨 **主题修复** | 工具成功、计划进度/完成/待处理等语义颜色独立化，告别撞色 |
+| 💾 **缓存优化** | Dream RAG 时间戳修复 + mtime 缓存 → 系统 prompt 保持字节稳定，V4 前缀缓存全量命中；Microcompact 折叠旧 tool result → 请求体缩小，重建缓存更快 |
+| ⚡ **微压缩算法** | 数量基微压缩管线：在发 API 前自动折叠 >5 个的旧 tool result，保留结构并给出 `retrieve_tool_result` 路径；与 spillover 机制互补，不影响持久化 session |
+| ⌨️ **! bash 直通** | `!<command>` 直通 Shell 执行，不经过 AI。适合 `gcloud auth login`、`ssh`、`gh auth login` 等交互式命令 |
+| 📋 **新增 & 指令** | `&bak` 备份代码文件 / `&rmb` 清除备份 / `&￥` 查询 DeepSeek 余额 |
 
 ## 优化详解
 
@@ -125,6 +129,70 @@
 - **直替换免膨胀**：引擎状态消息直接替换源码中的英文字符串，避免新增 60 个 MessageId 变体
 - **调色板不动**：不改 `palette.rs` 常量值，只改 `deepseek_theme.rs` 的语义映射，确保各主题一致性
 - **编译安全**：每次修改后通过 `cargo check` 验证，最终 `cargo build --release` 零 error 通过
+
+### 💾 缓存代码优化（大幅提升前缀缓存命中率）
+
+核心技术目标是：**最大化 V4 前缀缓存命中率**。系统 prompt 决定了请求的前 ~30K 字节，必须保持字节稳定。
+
+#### Dream RAG 时间戳修复
+- **问题**：`dream_memory.rs` 的 manifest 块含 `<!-- loaded at {now} -->`（每秒变化的 UTC 时间戳），注入系统 prompt 后导致每轮前 ~82K 字节全量 cache-miss
+- **修复**：去掉动态时间戳，改为 `<!-- byte-stable across turns -->`
+- **效果**：系统 prompt 区域从 **每轮全丢** 变为 **每轮全命中**（~30K tokens/轮从 cache-miss 转为 cache-hit）
+- **代价**：零。时间戳只有人类调试价值，模型不依赖此信息
+
+#### Manifest mtime 缓存
+- 为 `compose_block()` 添加 `ManifestCache`，按 `max_mtime_secs + file_count` 做 cache key
+- **效果**：相同文件集命中缓存，输出字节完全相同 → 系统 prompt 跨轮保持稳定
+- 文件变化时自动检测 mtime 变化 → 重建缓存 → 新的 byte-stable 基线
+- 暴露 `invalidate_manifest_cache()` 供 Dream 整合后调用，确保新内容立即生效
+
+### ⚡ 微压缩算法（Microcompact）
+
+借鉴 Claude Code 的 microcompact 管线，适配 DeepSeek API 特性。
+
+#### 实现方案
+- **位置**：`turn_loop.rs` 的 `build_request` 路径，发送 API 请求前自动执行
+- **触发条件**：可压缩的 tool result 超过 5 个
+- **处理方式**：按出现顺序收集 tool_use_id，保留最近 5 个，更旧的替换为折叠标记 + `retrieve_tool_result` 路径引用
+- **可压缩工具**：`read_file`, `exec_shell`, `grep_files`, `file_search`, `web_search`, `fetch_url`, `list_dir`
+- **最小清空长度**：200 字符（小于此的微小结果不折叠）
+
+#### 与 Spillover 机制互补
+
+| 机制 | Spillover | Microcompact |
+|------|-----------|-------------|
+| 时机 | 工具执行时 | 请求发送前 |
+| 触发 | 单结果 > 100 KiB | 累积超过 5 个 |
+| 处理 | 写磁盘 + 头部 + 路径引用 | 替换为折叠标记 + `retrieve_tool_result` 引用 |
+| 不碰 session | ✅ | ✅ |
+| 不调 LLM | ✅ | ✅ |
+
+#### 设计要点
+- **操作在 wire copy 上**：`messages_with_turn_metadata()` 的克隆上执行，不碰 `self.session.messages`，跨轮字节稳定
+- **数量基替代时间基**：Message 无时间戳字段，用 tool result 数量替代 gap 检测
+- **渐进式分批 summarize 被否决**：ROI 低——多次缓存断裂换摘要质量提升不划算
+- **折叠标记含 `retrieve_tool_result` 路径**：模型可通过 `retrieve_tool_result ref=<id>` 读取原始内容
+
+### ⌨️ `!` Bash 直通功能
+
+借鉴 Claude Code 的 `!` 前缀设计，提供 Shell 命令直通能力。
+
+- 用户输入 `!<command>` 或 `! <command>` 时直接执行 Shell 命令，不经过 AI 管线
+- 命令通过 `spawn_blocking` 在 `app.workspace` 目录下执行
+- 输出作为 Assistant 消息渲染到对话历史中
+- 适合 `git push`, `npm install`, `gcloud auth login`, `ssh`, 以及任何你想自己跑但希望结果留在对话里的命令
+- 模型可以在回复中引导用户：`建议输入 ! gcloud auth login 来登录`
+- 输出最大 10K 字符，超长自动截断
+
+### 📋 新增 & 指令
+
+| 指令 | 功能 | 说明 |
+|------|------|------|
+| `&bak` | 递归备份代码文件 | 遍历工作区，为 .c/.js/.ts/.rs/.py 等 40+ 代码扩展名创建 `.bak` 备份。自动跳过 `.git`/`node_modules`/`target` 目录。 |
+| `&rmb` | 删除所有 .bak 备份 | 只删 `<name>.<ext>.bak` 格式的文件，避免误删独立 `.bak` 文件 |
+| `&￥` | 查询 DeepSeek 余额 | 直调 `GET /user/balance` API，显示 `total_balance`。支持 `DEEPSEEK_API_KEY` 环境变量。 |
+
+三个命令在帮助面板（F1）、命令面板（Ctrl+P）、速选栏（`/` 菜单）三处同步注册。
 
 ## 安装
 

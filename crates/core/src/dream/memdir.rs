@@ -161,7 +161,11 @@ pub fn select_by_query_limit(
         .collect();
 
     // Sort by score descending.
-    scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    scored.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let count = limit.min(scored.len());
     scored[..count]
@@ -174,10 +178,7 @@ pub fn select_by_query_limit(
 ///
 /// Each file is truncated to `max_bytes` if it exceeds the limit,
 /// with a truncation marker appended.
-pub fn compose_blocks(
-    selected: &[MemoryHeader],
-    max_bytes: usize,
-) -> String {
+pub fn compose_blocks(selected: &[MemoryHeader], max_bytes: usize) -> String {
     let mut blocks = String::from("<dream_memories>\n");
 
     for mem in selected {
@@ -222,10 +223,18 @@ fn extract_description(path: &Path) -> String {
     for line in frontmatter.lines().take(FRONTMATTER_MAX_LINES) {
         let line = line.trim();
         if let Some(value) = line.strip_prefix("description:") {
-            return value.trim().trim_matches('"').trim_matches('\'').to_string();
+            return value
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string();
         }
         if let Some(value) = line.strip_prefix("description: ") {
-            return value.trim().trim_matches('"').trim_matches('\'').to_string();
+            return value
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string();
         }
     }
 
@@ -250,7 +259,10 @@ fn read_truncated(path: &Path, max_bytes: usize) -> String {
     }
     let omitted = content.len() - cutoff;
     let head = &content[..cutoff];
-    let marker = format!("\n\n<!-- truncated: omitted {omitted} bytes from {} -->", path.display());
+    let marker = format!(
+        "\n\n<!-- truncated: omitted {omitted} bytes from {} -->",
+        path.display()
+    );
     format!("{head}{marker}")
 }
 

@@ -5,6 +5,7 @@
 
 mod anchor;
 mod attachment;
+mod bak;
 mod balance;
 mod change;
 mod clean_cmd;
@@ -124,7 +125,11 @@ impl CommandInfo {
     }
 
     pub fn palette_command(&self) -> String {
-        let prefix = if self.usage.starts_with('&') { "&" } else { "/" };
+        let prefix = if self.usage.starts_with('&') {
+            "&"
+        } else {
+            "/"
+        };
         if self.requires_argument() {
             format!("{prefix}{} ", self.name)
         } else {
@@ -658,7 +663,12 @@ pub const COMMANDS: &[CommandInfo] = &[
     },
     CommandInfo {
         name: "explain",
-        aliases: &["explain-like-senior", "explainlikesenior", "jiangjie", "讲解"],
+        aliases: &[
+            "explain-like-senior",
+            "explainlikesenior",
+            "jiangjie",
+            "讲解",
+        ],
         usage: "&explain <代码路径>",
         description_id: MessageId::CmdHelpDescription,
     },
@@ -692,7 +702,7 @@ pub const COMMANDS: &[CommandInfo] = &[
         usage: "&docs [update|check|create <name>]",
         description_id: MessageId::CmdHelpDescription,
     },
-        CommandInfo {
+    CommandInfo {
         name: "remember",
         aliases: &["jizhu", "记录"],
         usage: "&remember <内容>",
@@ -723,6 +733,24 @@ pub const COMMANDS: &[CommandInfo] = &[
         description_id: MessageId::CmdHelpDescription,
     },
     CommandInfo {
+        name: "bak",
+        aliases: &["beifen", "备份"],
+        usage: "&bak",
+        description_id: MessageId::CmdHelpDescription,
+    },
+    CommandInfo {
+        name: "rmb",
+        aliases: &["shanbak", "shanchu", "删除备份"],
+        usage: "&rmb",
+        description_id: MessageId::CmdHelpDescription,
+    },
+    CommandInfo {
+        name: "￥",
+        aliases: &["balance", "yue", "余额"],
+        usage: "&￥",
+        description_id: MessageId::CmdHelpDescription,
+    },
+    CommandInfo {
         name: "update",
         aliases: &[],
         usage: "&update",
@@ -733,32 +761,108 @@ pub const COMMANDS: &[CommandInfo] = &[
 /// The set of commands valid with `&` prefix (custom commands only).
 /// Built-in commands like `clear`, `help`, `model` do NOT support `&`.
 pub const AMPERSAND_COMMANDS: &[&str] = &[
-    "init", "initiate", "chushihua", "初始化",
-    "glance", "lan", "gailan", "速览",
-    "search", "sousuo", "查找", "chazhao",
-    "plan", "guihua", "规划",
-    "format", "geshihua", "格式化",
-    "scaffold", "jiaoshoujia", "脚手架",
-    "test", "ceshi", "测试",
-    "implement", "daoru", "shixian", "实现",
-    "refactor", "chonggou", "重构",
-    "security-scan", "securityscan", "安全扫描",
-    "predict-issues", "predictissues", "yuce", "预测",
-    "remove-comments", "removecomments", "清理注释",
-    "fix-imports", "fiximports", "xiufudaoru", "修复导入",
-    "find-todos", "findtodos", "查找待办",
-    "create-todos", "createtodos", "添加待办",
-    "fix-todos", "fixtodos", "shixiantodo", "实现待办",
-    "understand", "lijie", "架构分析",
-    "explain", "explain-like-senior", "explainlikesenior", "jiangjie", "讲解",
-    "contributing", "gongxian", "贡献分析",
-    "make-it-pretty", "makeitpretty", "meihua", "美化",
-    "session-start", "sessionstart", "kaishihuihua", "开始会话",
-    "session-end", "sessionend", "jieshuhuihua", "结束会话",
-    "docs", "wen", "文档",
-    "todos-to-issues", "todostoissues", "todozhuanissue", "待办转议题",
-    "remember", "jizhu", "记录",
-    "dream", "meng", "记忆整合",
+    "init",
+    "initiate",
+    "chushihua",
+    "初始化",
+    "glance",
+    "lan",
+    "gailan",
+    "速览",
+    "search",
+    "sousuo",
+    "查找",
+    "chazhao",
+    "plan",
+    "guihua",
+    "规划",
+    "format",
+    "geshihua",
+    "格式化",
+    "scaffold",
+    "jiaoshoujia",
+    "脚手架",
+    "test",
+    "ceshi",
+    "测试",
+    "implement",
+    "daoru",
+    "shixian",
+    "实现",
+    "refactor",
+    "chonggou",
+    "重构",
+    "security-scan",
+    "securityscan",
+    "安全扫描",
+    "predict-issues",
+    "predictissues",
+    "yuce",
+    "预测",
+    "remove-comments",
+    "removecomments",
+    "清理注释",
+    "fix-imports",
+    "fiximports",
+    "xiufudaoru",
+    "修复导入",
+    "find-todos",
+    "findtodos",
+    "查找待办",
+    "create-todos",
+    "createtodos",
+    "添加待办",
+    "fix-todos",
+    "fixtodos",
+    "shixiantodo",
+    "实现待办",
+    "understand",
+    "lijie",
+    "架构分析",
+    "explain",
+    "explain-like-senior",
+    "explainlikesenior",
+    "jiangjie",
+    "讲解",
+    "contributing",
+    "gongxian",
+    "贡献分析",
+    "make-it-pretty",
+    "makeitpretty",
+    "meihua",
+    "美化",
+    "session-start",
+    "sessionstart",
+    "kaishihuihua",
+    "开始会话",
+    "session-end",
+    "sessionend",
+    "jieshuhuihua",
+    "结束会话",
+    "docs",
+    "wen",
+    "文档",
+    "todos-to-issues",
+    "todostoissues",
+    "todozhuanissue",
+    "待办转议题",
+    "bak",
+    "beifen",
+    "备份",
+    "rmb",
+    "shanbak",
+    "shanchu",
+    "删除备份",
+    "￥",
+    "balance",
+    "yue",
+    "余额",
+    "remember",
+    "jizhu",
+    "记录",
+    "dream",
+    "meng",
+    "记忆整合",
     "tips",
     "traps",
     "update",
@@ -771,7 +875,10 @@ pub fn execute(cmd: &str, app: &mut App) -> CommandResult {
     // ── & 前缀：完全独立的命令空间 ───────────────────────────
     if raw.starts_with('&') {
         let parts: Vec<&str> = raw.splitn(2, ' ').collect();
-        let cmd_name = parts[0].strip_prefix('&').unwrap_or(&parts[0]).to_lowercase();
+        let cmd_name = parts[0]
+            .strip_prefix('&')
+            .unwrap_or(&parts[0])
+            .to_lowercase();
         let arg = parts.get(1).map(|s| s.trim());
 
         // AMPERSAND_COMMANDS 白名单
@@ -786,7 +893,10 @@ pub fn execute(cmd: &str, app: &mut App) -> CommandResult {
 
     // ── / 前缀：内置命令 ────────────────────────────────────
     let parts: Vec<&str> = raw.splitn(2, ' ').collect();
-    let command = parts[0].strip_prefix('/').unwrap_or(parts[0]).to_lowercase();
+    let command = parts[0]
+        .strip_prefix('/')
+        .unwrap_or(parts[0])
+        .to_lowercase();
     let arg = parts.get(1).map(|s| s.trim());
 
     // Check user-defined commands FIRST so they can override built-ins.
@@ -912,9 +1022,7 @@ pub fn execute(cmd: &str, app: &mut App) -> CommandResult {
             }
             let suggestions = suggest_command_names(&command, 3);
             if suggestions.is_empty() {
-                CommandResult::error(format!(
-                    "未知命令：/{command}。输入 /help 查看可用命令。"
-                ))
+                CommandResult::error(format!("未知命令：/{command}。输入 /help 查看可用命令。"))
             } else {
                 let list = suggestions
                     .into_iter()
@@ -953,23 +1061,38 @@ fn dispatch_ampersand_command(name: &str, arg: Option<&str>, app: &mut App) -> C
         "security-scan" | "securityscan" | "安全扫描" => plugins::security_scan(app, arg),
         "predict-issues" | "predictissues" | "yuce" | "预测" => plugins::predict_issues(app, arg),
         "remove-comments" | "removecomments" | "清理注释" => plugins::remove_comments(app, arg),
-        "fix-imports" | "fiximports" | "xiufudaoru" | "修复导入" => plugins::fix_imports(app, arg),
+        "fix-imports" | "fiximports" | "xiufudaoru" | "修复导入" => {
+            plugins::fix_imports(app, arg)
+        }
         "find-todos" | "findtodos" | "查找待办" => plugins::find_todos(app, arg),
         "create-todos" | "createtodos" | "添加待办" => plugins::create_todos(app, arg),
         "fix-todos" | "fixtodos" | "shixiantodo" | "实现待办" => plugins::fix_todos(app, arg),
         "understand" | "lijie" | "架构分析" => plugins::understand(app, arg),
-        "explain" | "explain-like-senior" | "explainlikesenior" | "jiangjie" | "讲解" => plugins::explain(app, arg),
+        "explain" | "explain-like-senior" | "explainlikesenior" | "jiangjie" | "讲解" => {
+            plugins::explain(app, arg)
+        }
         "contributing" | "gongxian" | "贡献分析" => plugins::contributing(app, arg),
-        "make-it-pretty" | "makeitpretty" | "meihua" | "美化" => plugins::make_it_pretty(app, arg),
-        "session-start" | "sessionstart" | "kaishihuihua" | "开始会话" => plugins::session_start(app, arg),
-        "session-end" | "sessionend" | "jieshuhuihua" | "结束会话" => plugins::session_end(app, arg),
+        "make-it-pretty" | "makeitpretty" | "meihua" | "美化" => {
+            plugins::make_it_pretty(app, arg)
+        }
+        "session-start" | "sessionstart" | "kaishihuihua" | "开始会话" => {
+            plugins::session_start(app, arg)
+        }
+        "session-end" | "sessionend" | "jieshuhuihua" | "结束会话" => {
+            plugins::session_end(app, arg)
+        }
         "docs" | "wen" | "文档" => plugins::docs(app, arg),
         "remember" | "jizhu" | "记录" => plugins::remember(app, arg),
+        "bak" | "beifen" | "备份" => bak::bak(app),
+        "rmb" | "shanbak" | "shanchu" | "删除备份" => bak::rmb(app),
+        "￥" | "balance" | "yue" | "余额" => balance::balance(app),
         "dream" | "meng" | "记忆整合" => dream::dream(app, arg),
         "tips" => dream::tips(app, arg),
         "traps" => dream::traps(app, arg),
         "update" => dream::update(app, arg),
-        "todos-to-issues" | "todostoissues" | "todozhuanissue" | "待办转议题" => plugins::todos_to_issues(app, arg),
+        "todos-to-issues" | "todostoissues" | "todozhuanissue" | "待办转议题" => {
+            plugins::todos_to_issues(app, arg)
+        }
         _ => CommandResult::error(format!("未知命令：&{name}")),
     }
 }
@@ -1234,7 +1357,10 @@ fn resolves_to_existing_file(app: &App, input: &str) -> bool {
 
 /// Get command info by name or alias
 pub fn get_command_info(name: &str) -> Option<&'static CommandInfo> {
-    let name = name.strip_prefix('/').or_else(|| name.strip_prefix('&')).unwrap_or(name);
+    let name = name
+        .strip_prefix('/')
+        .or_else(|| name.strip_prefix('&'))
+        .unwrap_or(name);
     COMMANDS
         .iter()
         .find(|cmd| cmd.name == name || cmd.aliases.contains(&name))

@@ -46,15 +46,10 @@ pub fn dream(app: &App, arg: Option<&str>) -> CommandResult {
             // 锁将在函数返回时自动释放（Drop）
         }
         Ok(LockStatus::Held) => {
-            return CommandResult::error(
-                "另一个记忆整合正在运行，请等待其完成后再试。",
-            );
+            return CommandResult::error("另一个记忆整合正在运行，请等待其完成后再试。");
         }
         Err(e) => {
-            return CommandResult::error(format!(
-                "无法获取记忆整合锁（内部错误）：{}",
-                e,
-            ));
+            return CommandResult::error(format!("无法获取记忆整合锁（内部错误）：{}", e,));
         }
     }
 

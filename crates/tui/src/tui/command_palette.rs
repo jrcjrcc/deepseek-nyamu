@@ -8,7 +8,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Padding, Paragraph, Widget, Wrap},
+    widgets::{Block, Borders, Clear, Padding, Paragraph, Widget},
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -62,7 +62,11 @@ pub fn build_entries(
     let mut entries = Vec::new();
 
     for command in commands::COMMANDS {
-        let prefix = if command.usage.starts_with('&') { "&" } else { "/" };
+        let prefix = if command.usage.starts_with('&') {
+            "&"
+        } else {
+            "/"
+        };
         let mut description = if prefix == "&" {
             crate::tui::views::help::command_descriptor(command.name)
         } else {
@@ -148,7 +152,8 @@ pub fn build_entries(
                 ApprovalRequirement::Auto => {}
             }
 
-            let mut description = tool_zh_description(tool.name()).unwrap_or_else(|| tool.description().to_string());
+            let mut description =
+                tool_zh_description(tool.name()).unwrap_or_else(|| tool.description().to_string());
             if !tags.is_empty() {
                 description.push_str(" [");
                 description.push_str(&tags_cn(&tags).join(", "));
@@ -460,16 +465,18 @@ fn tool_zh_description(name: &str) -> Option<String> {
 
 /// Translate tag labels to Chinese.
 fn tags_cn(tags: &[&str]) -> Vec<String> {
-    tags.iter().map(|t| match *t {
-        "read-only" => "只读".to_string(),
-        "writes" => "写入".to_string(),
-        "shell" => "命令行".to_string(),
-        "network" => "网络".to_string(),
-        "parallel" => "并行".to_string(),
-        "requires approval" => "需审批".to_string(),
-        "suggest approval" => "建议审批".to_string(),
-        other => other.to_string(),
-    }).collect()
+    tags.iter()
+        .map(|t| match *t {
+            "read-only" => "只读".to_string(),
+            "writes" => "写入".to_string(),
+            "shell" => "命令行".to_string(),
+            "network" => "网络".to_string(),
+            "parallel" => "并行".to_string(),
+            "requires approval" => "需审批".to_string(),
+            "suggest approval" => "建议审批".to_string(),
+            other => other.to_string(),
+        })
+        .collect()
 }
 
 fn format_tool_details(name: &str, description: &str, tags: &[&str]) -> String {
@@ -677,7 +684,11 @@ impl CommandPaletteView {
 
     /// Compute the first visible row so the selected entry stays roughly
     /// centered in the popup body. Identical logic to HelpView.
-    fn visible_row_start(rows: &[PaletteRenderRow], selected: usize, visible_budget: usize) -> usize {
+    fn visible_row_start(
+        rows: &[PaletteRenderRow],
+        selected: usize,
+        visible_budget: usize,
+    ) -> usize {
         if rows.len() <= visible_budget {
             return 0;
         }
@@ -820,7 +831,9 @@ impl ModalView for CommandPaletteView {
 
         // Content area inside block = popup_height - 4 (border×2 + padding×2)
         // Minus 9 header rows = item row budget
-        let visible = (popup_height.saturating_sub(4) as usize).saturating_sub(9).max(1);
+        let visible = (popup_height.saturating_sub(4) as usize)
+            .saturating_sub(9)
+            .max(1);
         let mut action_count = 0usize;
         let mut command_count = 0usize;
         let mut skill_count = 0usize;
@@ -873,7 +886,9 @@ impl ModalView for CommandPaletteView {
                         let desc = if entry.description.width() > desc_cap {
                             let mut s = String::new();
                             for ch in entry.description.chars() {
-                                if s.width() >= desc_cap.saturating_sub(3) { break; }
+                                if s.width() >= desc_cap.saturating_sub(3) {
+                                    break;
+                                }
                                 s.push(ch);
                             }
                             format!("{s}...")
@@ -895,9 +910,7 @@ impl ModalView for CommandPaletteView {
                 Span::styled("Esc close", Style::default().fg(palette::TEXT_MUTED)),
             ]));
 
-        Paragraph::new(lines)
-            .block(block)
-            .render(popup_area, buf);
+        Paragraph::new(lines).block(block).render(popup_area, buf);
     }
 }
 

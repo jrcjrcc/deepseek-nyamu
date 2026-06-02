@@ -110,6 +110,21 @@ docs/*handoff*.md
 docs/*_PLAN.md
 !docs/archive/**
 
+# CNB deploy config
+.cnb.yml
+
+# Personality files (calm.md etc.)
+crates/tui/src/prompts/personalities/
+
+# Backup files from &bak command
+*.bak
+*.bak.*
+
+# Session exports and dumps
+chat_export_*.md
+dummy.txt
+out.txt
+
 # direnv
 .envrc
 .direnv

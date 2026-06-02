@@ -1706,10 +1706,8 @@ impl App {
         // setting still overlays on top.
         let theme_id =
             palette::ThemeId::from_name(&settings.theme).unwrap_or(palette::ThemeId::System);
-        let ui_theme = palette::ui_theme_from_settings(
-            &settings.theme,
-            settings.background_color.as_deref(),
-        );
+        let ui_theme =
+            palette::ui_theme_from_settings(&settings.theme, settings.background_color.as_deref());
         let model = settings
             .provider_models
             .as_ref()

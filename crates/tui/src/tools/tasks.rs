@@ -276,13 +276,14 @@ impl ToolSpec for TaskGateRunTool {
         // ── Command validation (defense-in-depth) ────────────────────────
         // Null bytes cannot be passed through argv safely; reject early.
         if command.contains('\0') {
-            return Ok(ToolResult::error(
-                "BLOCKED: command contains null byte".to_string(),
-            )
-            .with_metadata(json!({
-                "safety_level": "blocked",
-                "reason": "null byte in command",
-            })));
+            return Ok(
+                ToolResult::error("BLOCKED: command contains null byte".to_string()).with_metadata(
+                    json!({
+                        "safety_level": "blocked",
+                        "reason": "null byte in command",
+                    }),
+                ),
+            );
         }
         // Reasonable upper bound to prevent argv/DoS abuse.
         if command.len() > 100_000 {
@@ -1034,7 +1035,8 @@ fn sanitize_filename(input: &str) -> String {
 fn is_critically_dangerous(command: &str) -> bool {
     let lower = command.to_lowercase();
     // Root-filesystem deletion via rm
-    let rm_root = lower.contains("rm -rf /") || lower.contains("rm -fr /") || lower.contains("rm -rf /*");
+    let rm_root =
+        lower.contains("rm -rf /") || lower.contains("rm -fr /") || lower.contains("rm -rf /*");
     // Fork bomb
     let fork_bomb = lower.contains(":(){");
     // Find mutation targeting root

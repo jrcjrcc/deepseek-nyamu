@@ -217,6 +217,7 @@ fn release_asset_name_for_prefix(prefix: &str, os: &str, rust_arch: &str) -> Str
     }
 }
 
+#[allow(dead_code)]
 fn binary_prefix_for_exe(current_exe: &Path) -> &'static str {
     let exe_name = current_exe
         .file_name()

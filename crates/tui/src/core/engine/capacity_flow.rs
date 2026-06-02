@@ -707,8 +707,7 @@ impl Engine {
         let _ = self
             .tx_event
             .send(Event::status(
-                "容量护栏：上下文已重置为规范状态，重新规划步骤。"
-                    .to_string(),
+                "容量护栏：上下文已重置为规范状态，重新规划步骤。".to_string(),
             ))
             .await;
 

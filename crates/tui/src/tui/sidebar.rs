@@ -578,7 +578,14 @@ fn render_sidebar_work(f: &mut Frame, area: Rect, app: &mut App) {
     );
 
     let full_texts: Vec<String> = lines.iter().map(|l| spans_to_text(&l.spans)).collect();
-    render_sidebar_section(f, area, app.tr(MessageId::SidebarWork), lines, full_texts, app);
+    render_sidebar_section(
+        f,
+        area,
+        app.tr(MessageId::SidebarWork),
+        lines,
+        full_texts,
+        app,
+    );
 }
 
 fn render_sidebar_tasks(f: &mut Frame, area: Rect, app: &mut App) {
@@ -591,7 +598,14 @@ fn render_sidebar_tasks(f: &mut Frame, area: Rect, app: &mut App) {
     let lines = task_panel_lines(app, content_width.max(1), usable_rows.max(1));
 
     let full_texts: Vec<String> = lines.iter().map(|l| spans_to_text(&l.spans)).collect();
-    render_sidebar_section(f, area, app.tr(MessageId::SidebarTasks), lines, full_texts, app);
+    render_sidebar_section(
+        f,
+        area,
+        app.tr(MessageId::SidebarTasks),
+        lines,
+        full_texts,
+        app,
+    );
 }
 
 #[derive(Debug, Clone)]
@@ -626,7 +640,11 @@ fn task_panel_lines(app: &App, content_width: usize, max_rows: usize) -> Vec<Lin
 
     let active_rows = active_tool_rows(app);
     if !active_rows.is_empty() && lines.len() < max_rows {
-        push_sidebar_label(&mut lines, app.tr(MessageId::SidebarLiveTools), palette::DEEPSEEK_SKY);
+        push_sidebar_label(
+            &mut lines,
+            app.tr(MessageId::SidebarLiveTools),
+            palette::DEEPSEEK_SKY,
+        );
         push_tool_rows(&mut lines, &active_rows, content_width, max_rows);
     }
 
@@ -2018,7 +2036,13 @@ mod tests {
             ..SidebarWorkSummary::default()
         };
 
-        let text = lines_to_text(&work_panel_lines(&summary, 80, 16, PaletteMode::Dark, &create_test_app()));
+        let text = lines_to_text(&work_panel_lines(
+            &summary,
+            80,
+            16,
+            PaletteMode::Dark,
+            &create_test_app(),
+        ));
 
         assert!(
             text[0].starts_with("33% complete (1/3)"),
@@ -2054,7 +2078,13 @@ mod tests {
             ..SidebarWorkSummary::default()
         };
 
-        let text = lines_to_text(&work_panel_lines(&summary, 80, 6, PaletteMode::Dark, &create_test_app()));
+        let text = lines_to_text(&work_panel_lines(
+            &summary,
+            80,
+            6,
+            PaletteMode::Dark,
+            &create_test_app(),
+        ));
 
         assert!(
             text.iter()
@@ -2086,7 +2116,13 @@ mod tests {
             strategy_explanation: Some("High-level sequencing".to_string()),
             ..SidebarWorkSummary::default()
         };
-        let text = lines_to_text(&work_panel_lines(&summary, 80, 16, PaletteMode::Dark, &create_test_app()));
+        let text = lines_to_text(&work_panel_lines(
+            &summary,
+            80,
+            16,
+            PaletteMode::Dark,
+            &create_test_app(),
+        ));
         assert!(
             text.iter().any(|line| line == "Strategy metadata"),
             "non-empty plan should show strategy label: {text:?}"

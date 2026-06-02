@@ -56,7 +56,10 @@ pub fn cleanproject(app: &App, arg: Option<&str>) -> CommandResult {
 
         // 跳过保护目录
         if let Ok(rel) = path.strip_prefix(workspace) {
-            let components: Vec<_> = rel.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
+            let components: Vec<_> = rel
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().to_string())
+                .collect();
             for comp in &components {
                 let c = comp.as_str();
                 if PROTECTED_DIRS.contains(&c) {

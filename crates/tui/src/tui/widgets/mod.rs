@@ -1,3 +1,9 @@
+//! Reusable TUI widget components.
+//!
+//! Provides self-contained UI elements — footer status bar, header bar,
+//! command-and-key-hint chips, agent/decision/tool cards, and the
+//! pending-input preview — that slot into the main layout in `ui.rs`.
+
 mod footer;
 mod header;
 // Some helpers (`shift`, `ctrl_alt`, `is_press`, etc.) are part of the
@@ -2072,17 +2078,23 @@ pub(crate) fn slash_completion_hints(
         return Vec::new();
     }
 
-    let prefix = input
-        .trim_start_matches('/')
-        .trim_start_matches('&');
+    let prefix = input.trim_start_matches('/').trim_start_matches('&');
     let completing_skill_arg = prefix.strip_prefix("skill ").map(str::trim_start);
     if input.contains(char::is_whitespace) && completing_skill_arg.is_none() {
         return Vec::new();
     }
     // 根据输入的前缀字符过滤：& 前缀只显示 & 命令，/ 前缀只显示 / 命令
-    let input_prefix_char = if input.trim_start().starts_with('&') { "&" } else { "/" };
+    let input_prefix_char = if input.trim_start().starts_with('&') {
+        "&"
+    } else {
+        "/"
+    };
     let matches_input_prefix = |cmd: &commands::CommandInfo| -> bool {
-        if input_prefix_char == "&" { cmd.usage.starts_with('&') } else { !cmd.usage.starts_with('&') }
+        if input_prefix_char == "&" {
+            cmd.usage.starts_with('&')
+        } else {
+            !cmd.usage.starts_with('&')
+        }
     };
 
     let mut entries: Vec<SlashMenuEntry> = Vec::new();
@@ -2266,6 +2278,9 @@ fn amp_desc(name: &str) -> &'static str {
         "session-end" | "sessionend" => "总结并保存会话",
         "docs" => "智能文档管理",
         "todos-to-issues" | "todostoissues" => "TODO 转 Issue 格式",
+        "bak" | "beifen" | "备份" => "递归备份代码文件为 .bak",
+        "rmb" | "shanbak" | "shanchu" | "删除备份" => "删除所有 .bak 备份文件",
+        "￥" | "balance" | "yue" | "余额" => "查询 API 余额",
         "remember" | "jizhu" | "记录" => "记录规则/约定到指令文件",
         "commit" => "智能 git 提交",
         "cleanproject" | "clean" => "清理临时文件",
@@ -2293,7 +2308,8 @@ fn push_command_entry(
             } else {
                 format!(
                     "  (aliases: {})",
-                    info.aliases.iter()
+                    info.aliases
+                        .iter()
                         .map(|a| format!("&{a}"))
                         .collect::<Vec<_>>()
                         .join(", ")
@@ -2327,11 +2343,7 @@ fn push_command_entry(
         let desc = if info.aliases.is_empty() {
             info.description_for(locale).to_string()
         } else {
-            format!(
-                "{}  (aliases: {})",
-                info.description_for(locale),
-                aliases,
-            )
+            format!("{}  (aliases: {})", info.description_for(locale), aliases,)
         };
         (desc, hint)
     } else {

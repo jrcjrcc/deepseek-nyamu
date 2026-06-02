@@ -1,3 +1,10 @@
+//! Configuration loading, schema, migration, and CLI arg parsing.
+//!
+//! Central config management for the DeepSeek TUI ecosystem. Owns the
+//! top-level config TOML schema, environment-variable overrides, legacy
+//! migration paths, and the CLI argument hierarchy that feeds the
+//! dispatcher and runtime.
+
 use std::collections::BTreeMap;
 use std::fs;
 #[cfg(unix)]
@@ -1767,12 +1774,9 @@ pub fn migrate_config_if_needed() -> Result<()> {
     let tui_toml = primary_home.join("tui.toml");
     if !tui_toml.exists() {
         // Minimal content — serde defaults fill the rest.
-        let content = "# Fresh tui.toml — UI defaults come from the compiled binary.\n"
-            .to_string();
+        let content = "# Fresh tui.toml — UI defaults come from the compiled binary.\n".to_string();
         if let Err(e) = std::fs::write(&tui_toml, &content) {
-            tracing::warn!(
-                "Failed to write fresh tui.toml: {e}; legacy tui.toml may still apply",
-            );
+            tracing::warn!("Failed to write fresh tui.toml: {e}; legacy tui.toml may still apply",);
         }
     }
 
@@ -1782,10 +1786,7 @@ pub fn migrate_config_if_needed() -> Result<()> {
         let dst = primary_home.join(subdir);
         if src.exists() && !dst.exists() {
             if let Err(e) = copy_dir_all(&src, &dst) {
-                tracing::warn!(
-                    "Failed to migrate {}/: {e}; continuing",
-                    src.display()
-                );
+                tracing::warn!("Failed to migrate {}/: {e}; continuing", src.display());
             } else {
                 tracing::info!("Migrated {}/ to {}/", src.display(), dst.display());
             }
