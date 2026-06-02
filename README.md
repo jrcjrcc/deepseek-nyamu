@@ -8,7 +8,7 @@
 
 | 类别 | 内容 |
 |------|------|
-| 🛠️ **19 项缺陷修复** | Snapshot 死循环、事件通道阻塞、SQLite PRAGMA+并发测试、线程饥饿、Session 膨胀、TaskManager 竞态、Dream 文件锁、工具锁、子模块兼容、MCP 健康检查、Sub-agent 通知、SSE 看门狗、锁中毒防护、MCP 子进程隔离、通道背压丢弃、serde 静默错误、APPROVAL_TIMEOUT 可配等 |
+| 🛠️ **21 项缺陷修复** | Snapshot 死循环、事件通道阻塞、SQLite PRAGMA+并发测试、线程饥饿、Session 膨胀、TaskManager 竞态、Dream 文件锁、工具锁、子模块兼容、MCP 健康检查、Sub-agent 通知、SSE 看门狗、锁中毒防护、MCP 子进程隔离、通道背压丢弃、serde 静默错误、APPROVAL_TIMEOUT 可配、计时攻击修复、Mermaid XSS 修复等 |
 | 🚀 **指令系统增强** | `&dream`/`&tips`/`&traps`/`&update` 记忆与实用指令，`##` 快捷记录，三入口统一描述 |
 | 🌏 **完整汉化** | 引擎状态栏、思考标签、侧栏、工具面板标签全覆盖（280+ MessageId） |
 | 🎨 **主题修复** | 工具成功、计划进度/完成/待处理等语义颜色独立化，告别撞色 |
@@ -23,7 +23,7 @@
 
 ## 优化详解
 
-### 🔧 19 项代码缺陷修复
+### 🔧 21 项代码缺陷修复
 
 | # | 问题 | 修复方式 |
 |---|------|---------|
@@ -51,6 +51,8 @@
 | 17 | 事件通道满时 engine 停转 | `try_send()` 替代 `send().await`：通道满时丢弃非关键事件（MessageDelta / Status / ThinkingDelta 等瞬时状态），保留关键事件（Error / ToolResult / StreamEnd 等）降级为阻塞发送。LLM 快时不再卡 engine，被丢的事件下一轮 poll 自动补全，用户无感知。 |
 | 18 | serde 静默吞掉反序列化错误 | `state/src/lib.rs` 3 处 `serde_json::from_str(&state_json).unwrap_or(Value::Null)` 改为 `.map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?` / `.with_context(...)?`。checkpoint 数据损坏时错误不再被 Null 吞掉，向上传播到调用方。 |
 | 19 | APPROVAL_TIMEOUT 硬编码 300 秒 | `runtime_threads.rs` 的 `const APPROVAL_DECISION_TIMEOUT: Duration = Duration::from_secs(300)` 改为 `OnceLock<Duration>` + `approval_timeout()` 函数 + `set_approval_timeout_secs()` setter。运行时优先级：环境变量 `CODEWHALE_APPROVAL_TIMEOUT_SECS` → 默认值 300s。 |
+| 20 | auth token `==` 非常量时间比较 | `app-server/src/lib.rs:412`——`token == expected` 改为 `subtle::ConstantTimeEq::ct_eq()` + `subtle = "2.6"` crate 依赖。攻击者无法从 HTTP 响应时间逐字节推断 token。 |
+| 21 | Mermaid 组件 XSS（DOMPurify）| `web/components/mermaid-diagram.tsx`——4 组手写 regex sanitizer（strip script/on*/javascript:）替换为 `DOMPurify.sanitize(svg)`，依赖 `dompurify ^3.2.4` + `@types/dompurify ^3.2.5`。覆盖 data: URL、foreignObject 嵌入、SVG use 劫持等 regex 无法穷尽的 edge case。 |
 
 ### 🚀 指令系统增强
 
@@ -637,6 +639,66 @@ set_approval_timeout_secs() 运行时注入 → CODEWHALE_APPROVAL_TIMEOUT_SECS 
 ```
 
 ConfigToml 未加字段——TUI 的 Config 有 50+ 处 struct literal，加字段需同步修改全部，投入产出比不划算。
+
+### 🛡️ auth token 常数时间比较
+
+#### 问题
+
+`app-server/src/lib.rs:412` 中 token 验证使用 Rust 默认的字符串 `==` 比较：
+
+```rust
+.is_some_and(|token| token == expected)
+```
+
+`==` 是**短路比较**——逐字节比较，遇到第一个不同的字节立即返回 `false`。攻击者可以测量不同 token 的响应时间差异，逐字节推断出正确的 token（计时攻击）。对 localhost-only 的 admin API 来说威胁不大，但防御成本极低。
+
+#### 实现
+
+```rust
+use subtle::ConstantTimeEq;
+
+// 改之后——常数量级按位比较
+.is_some_and(|token| {
+    token.as_bytes().ct_eq(expected.as_bytes()).into()
+})
+```
+
+`ct_eq()` 无论输入内容如何都消耗相同时间，攻击者无法从时间侧信道获取信息。
+
+`app-server/Cargo.toml` 新增 `subtle = "2.6"` crate。
+
+### 🛡️ DOMPurify 替代手写 SVG sanitizer
+
+#### 问题
+
+`mermaid-diagram.tsx` 中 Mermaid 生成的 SVG 注入到 DOM 前由手写 regex 做 sanitization：
+
+```typescript
+// 改之前——4 组手写 regex
+const sanitized = svg
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')  // strip script
+    .replace(/\bon\w+\s*=\s*"[^"]*"/gi, '')                               // strip on*
+    .replace(/\bon\w+\s*=\s*'[^']*'/gi, '')
+    .replace(/href\s*=\s*"javascript:[^"]*"/gi, '');                       // strip javascript:
+```
+
+这套 regex 无法覆盖：
+- `data:` URL 引入的 XSS
+- `<foreignObject>` 嵌入的 HTML/JS
+- SVG `<use>` 劫持
+- 不区分大小写的属性名变体
+
+#### 实现
+
+```typescript
+// 改之后——经实战检验的库
+import DOMPurify from 'dompurify';
+
+// DOMPurify.sanitize() 覆盖全部 edge case
+const sanitized = DOMPurify.sanitize(svg);
+```
+
+`web/package.json` 新增 `dompurify ^3.2.4` + `@types/dompurify ^3.2.5`。
 
 ### ⌨️ `!` Bash 直通功能
 
