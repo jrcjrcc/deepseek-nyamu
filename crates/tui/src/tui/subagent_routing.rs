@@ -113,7 +113,7 @@ pub(super) fn handle_subagent_mailbox(app: &mut App, seq: u64, message: &Mailbox
     {
         apply_to_fanout(card, message);
         app.subagent_card_index.insert(agent_id, idx);
-        app.mark_history_updated();
+        app.bump_history_cell(idx);
         return;
     }
 
@@ -129,7 +129,7 @@ pub(super) fn handle_subagent_mailbox(app: &mut App, seq: u64, message: &Mailbox
             _ => false,
         };
         if updated {
-            app.mark_history_updated();
+            app.bump_history_cell(idx);
         }
         return;
     }
