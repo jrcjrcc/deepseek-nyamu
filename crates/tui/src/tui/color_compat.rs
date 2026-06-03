@@ -38,6 +38,7 @@ pub(crate) struct ColorCompatBackend<W: Write> {
     /// Forcing the expected size prevents ratatui's internal `autoresize` from
     /// shrinking the viewport back to the stale dimension inside `draw()`.
     forced_size: Option<Size>,
+    terminal_size: Option<Size>,
 }
 
 impl<W: Write> ColorCompatBackend<W> {
@@ -53,6 +54,7 @@ impl<W: Write> ColorCompatBackend<W> {
             // to a community preset.
             active_ui_theme: UiTheme::detect(),
             forced_size: None,
+            terminal_size: None,
         }
     }
 
@@ -71,6 +73,10 @@ impl<W: Write> ColorCompatBackend<W> {
     pub(crate) fn set_theme(&mut self, theme_id: ThemeId, ui_theme: UiTheme) {
         self.theme_id = theme_id;
         self.active_ui_theme = ui_theme;
+    }
+
+    pub(crate) fn set_terminal_size(&mut self, size: Size) {
+        self.terminal_size = Some(size);
     }
 }
 
@@ -137,10 +143,10 @@ impl<W: Write> Backend for ColorCompatBackend<W> {
     }
 
     fn size(&self) -> io::Result<Size> {
-        match self.forced_size {
-            Some(size) => Ok(size),
-            None => self.inner.size(),
+        if let Some(size) = self.terminal_size.or(self.forced_size) {
+            return Ok(size);
         }
+        self.inner.size()
     }
 
     fn window_size(&mut self) -> io::Result<WindowSize> {

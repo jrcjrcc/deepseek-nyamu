@@ -2364,14 +2364,12 @@ async fn run_event_loop(
                 // this single draw so the buffer matches the real viewport.
                 {
                     let backend = terminal.backend_mut();
-                    backend.force_size(Size::new(final_w, final_h));
+                    let new_size = Size::new(final_w, final_h);
+                    backend.force_size(new_size);
+                    backend.set_terminal_size(new_size);
                 }
                 draw_app_frame_inner(terminal, app, true)?;
                 draws_since_last_full_repaint = 0;
-                {
-                    let backend = terminal.backend_mut();
-                    backend.clear_forced_size();
-                }
                 app.needs_redraw = false;
                 continue;
             }
@@ -7034,6 +7032,13 @@ fn resume_terminal(
         use_bracketed_paste,
     );
     reset_terminal_viewport(terminal, sync_output_enabled)?;
+
+    // Re-query terminal size after re-entering alt screen.
+    // On Windows the buffer width may differ from the window width.
+    if let Ok((cols, rows)) = crossterm::terminal::size() {
+        terminal.backend_mut().set_terminal_size(Size::new(cols, rows));
+    }
+
     Ok(())
 }
 
