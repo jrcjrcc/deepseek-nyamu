@@ -54,6 +54,220 @@
 | 20 | auth token `==` 非常量时间比较 | `app-server/src/lib.rs:412`——`token == expected` 改为 `subtle::ConstantTimeEq::ct_eq()` + `subtle = "2.6"` crate 依赖。攻击者无法从 HTTP 响应时间逐字节推断 token。 |
 | 21 | Mermaid 组件 XSS（DOMPurify）| `web/components/mermaid-diagram.tsx`——4 组手写 regex sanitizer（strip script/on*/javascript:）替换为 `DOMPurify.sanitize(svg)`，依赖 `dompurify ^3.2.4` + `@types/dompurify ^3.2.5`。覆盖 data: URL、foreignObject 嵌入、SVG use 劫持等 regex 无法穷尽的 edge case。 |
 
+# Windows Sub-agent 完成时 UI 渲染宽度减半 Bug
+
+## 概述
+
+在 Windows 平台下，当 sub-agent（子代理）完成并返回数据给主 agent 后，终端 UI 的渲染区域会缩小到约原本宽度的一半，导致文字换行错位、内容错乱。必须手动缩小窗口再全屏才能恢复。
+
+- **受影响平台**：Windows（PowerShell / Windows Terminal）
+- **不受影响**：WSL (zsh)、macOS、Linux
+- **触发命令**：`/agent 0 今天天气怎么样` 等涉及 sub-agent 交互的场景
+
+---
+
+## 症状
+
+| # | 症状 | 说明 |
+|---|------|------|
+| 1 | UI 渲染区域缩小到约 1/2 宽度 | 终端全屏，但内容只占一半宽度 |
+| 2 | 文字换行错位 | 在错误的宽度上换行 |
+| 3 | 滚动/刷新无效 | `needs_redraw` 触发重绘后仍然错误 |
+| 4 | 缩小窗口时"贪吃蛇"效果 | 右侧渲染内容跨行穿到左侧 |
+| 5 | 必须重新缩放窗口才能恢复 | 缩小→全屏→滚动后恢复正常 |
+
+---
+
+## 探索过程
+
+### 第一阶段：初步定位
+
+最初以为是 transcript cache 的 revision 未更新导致的布局缓存问题。检查了 `ensure_split()` 和 `flatten_from()` 的缓存逻辑。
+
+**已修复**：在 `subagent_routing.rs` 中将 3 处 `mark_history_updated()` 改为 `bump_history_cell(idx)`，强制 sub-agent 卡片所在 cell 的 revision 变化，使 cache 检测到 miss 并重建布局。
+
+但问题仍未解决。
+
+### 第二阶段：缩小范围
+
+发现 WSL 下不触发、Windows 下必触发 → 平台相关。
+
+排查方向：
+- `ColorDepth::detect()` — 新旧项目相同 ✅
+- `ColorCompatBackend` — 新旧项目代码一致 ✅
+- 依赖版本 (crossterm 0.28, ratatui 0.30) — 相同 ✅
+- 新旧项目的 `ui.rs` 事件循环 — 几乎相同 ✅
+
+### 第三阶段：发现关键线索
+
+对比新旧项目 `size()` 方法：
+
+**旧项目 (nyamu)**：
+```rust
+fn size(&self) -> io::Result<Size> {
+    match self.forced_size {
+        Some(size) => Ok(size),
+        None => self.inner.size(),
+    }
+}
+```
+
+**新项目**：
+```rust
+fn size(&self) -> io::Result<Size> {
+    if let Some(size) = self.terminal_size.or(self.forced_size) {
+        return Ok(size);
+    }
+    self.inner.size()
+}
+```
+
+发现 `set_terminal_size()` 方法定义在 `ColorCompatBackend` 上，但**整个代码库里没有任何调用者**。`terminal_size` 始终为 `None`。
+
+### 第四阶段：深入事件流程
+
+跟踪 `AgentComplete` 事件处理器：
+
+```rust
+// ui.rs:2033
+if should_recapture_terminal {
+    resume_terminal(...)?;
+}
+```
+
+对比 `ResumeEvents` 处理器：
+
+```rust
+// ui.rs:1957
+if event_broker.is_paused() {
+    resume_terminal(...)?;
+}
+```
+
+发现 `AgentComplete` 缺少 `is_paused()` 守卫！
+
+### 第五阶段：完整触发链确认
+
+```
+AgentComplete
+    → should_recapture_terminal = true
+    → resume_terminal() 无条件调用（缺少 is_paused 守卫）
+    → EnterAlternateScreen（已在 alt screen 中时二次进入）
+    → Windows 创建新的 alt screen buffer，尺寸可能 ≠ 窗口尺寸
+    → 下一次 draw()
+        → backend.size()
+            → terminal_size = None（从未被设置）
+            → forced_size = 可能过期或 None
+            → crossterm::terminal::size() 返回 buffer 宽度（非窗口宽度）
+    → Frame 使用错误宽度渲染
+    → 内容换行在错误宽度 → "半宽"UI
+```
+
+---
+
+## 根因分析
+
+Bug 由三个因素共同导致：
+
+### 因素 A：`AgentComplete` 缺 `is_paused()` 守卫
+
+`AgentComplete` 在 sub-agent 完成时无条件调用 `resume_terminal()`，即使终端从未被暂停过（sub-agent 使用非交互式工具，不会触发 `PauseEvents`）。
+
+而同一文件中的 `ResumeEvents` 处理器就有 `event_broker.is_paused()` 守卫。
+
+**位置**：`ui.rs:2033-2044`
+
+### 因素 B：二次 `EnterAlternateScreen` 导致缓冲区尺寸漂移
+
+Windows 上，已在 alternate screen 中时再次调用 `EnterAlternateScreen` 会创建**新的 alt screen 缓冲区**。新缓冲区的 `dwSize.X`（从 `GetConsoleScreenBufferInfo()` 获取）可能与实际窗口宽度不一致。
+
+而 `resume_terminal()` 后没有重新查询终端尺寸。
+
+**位置**：`ui.rs:7547-7548`（`resume_terminal` 中的 `EnterAlternateScreen`）
+
+### 因素 C：`set_terminal_size()` 从未被调用
+
+`ColorCompatBackend` 定义了 `set_terminal_size()` 方法和 `terminal_size` 缓存字段，但没有任何代码调用它。`size()` 方法中 `terminal_size.or(forced_size)` 的回退链中 `terminal_size` 总是 `None`，实际只依赖 `forced_size`（可能过期）或实时 `crossterm::terminal::size()`（Windows WinAPI 返回 buffer 宽度而非窗口宽度）。
+
+**位置**：`color_compat.rs:89, 180-185`
+
+---
+
+## 修复方案
+
+### 修复 1：`AgentComplete` 加 `is_paused()` 守卫
+
+```rust
+// 修复前
+if should_recapture_terminal {
+    resume_terminal(...)?;
+}
+
+// 修复后
+if should_recapture_terminal && event_broker.is_paused() {
+    resume_terminal(...)?;
+}
+```
+
+**作用**：只在终端确实被暂停过时调用 `resume_terminal()`，防止 sub-agent 完成时二次 `EnterAlternateScreen`。
+
+### 修复 2：`resume_terminal` 后重新查询并缓存终端尺寸
+
+```rust
+// resume_terminal() 末尾添加
+if let Ok((cols, rows)) = crossterm::terminal::size() {
+    terminal.backend_mut().set_terminal_size(Size::new(cols, rows));
+}
+```
+
+**作用**：重新进入 alt screen 后把当前真实终端尺寸缓存到 `terminal_size`，后续 `draw()` 使用缓存值避免过期的 `forced_size` 或 WinAPI 的 buffer 宽度。
+
+### 修复 3：Resize 处理器也设置 `terminal_size`
+
+```rust
+// 修复前
+backend.force_size(Size::new(final_w, final_h));
+
+// 修复后
+let new_size = Size::new(final_w, final_h);
+backend.force_size(new_size);
+backend.set_terminal_size(new_size);
+```
+
+**作用**：Resize 事件时同时设置 `forced_size` 和 `terminal_size`，使 `size()` 方法的第一级缓存真正生效。
+
+---
+
+## 最终改动清单
+
+| 文件 | 行 | 改动 |
+|------|----|------|
+| `ui.rs` | 2033 | `should_recapture_terminal` → `should_recapture_terminal && event_broker.is_paused()` |
+| `ui.rs` | 2557-2565 | resize handler 添加 `set_terminal_size()`，移除 `clear_forced_size()` |
+| `ui.rs` | 7562-7570 | `resume_terminal()` 末尾添加 `crossterm::terminal::size()` 查询和 `set_terminal_size()` 缓存 |
+| `color_compat.rs` | — | `set_terminal_size()` 方法已定义，无需改动 |
+| `subagent_routing.rs` | 116, 132, 155 | `mark_history_updated()` → `bump_history_cell()`（补充修复） |
+
+---
+
+## 平台安全性
+
+| 平台 | 风险 | 说明 |
+|------|------|------|
+| macOS | ✅ 无影响 | `is_paused()` 所有平台可用；`TIOCGWINSZ` 始终返回正确尺寸 |
+| Linux | ✅ 无影响 | 同上 |
+| WSL | ✅ 无影响 | 同上 |
+| Windows | ✅ 已修复 | 三次改动共同防止 buffer/窗口尺寸漂移 |
+
+---
+
+## 致谢
+
+- 排查工具：CodeWhale + Rust 源码分析
+- 对比基准：`deepseek-nyamu-master`（喵梦.exe）
+- 测试环境：Windows Terminal + PowerShell, WSL2 + zsh
+
+
 ### 🚀 指令系统增强
 
 借鉴 Claude Code 的 `&` 指令体系，将常用操作整合为快捷指令。全部 30 个 `&` 命令在三处统一注册（帮助面板、命令面板、速选栏），不再遗漏：
