@@ -1,0 +1,20 @@
+[package]
+name = "nyamu-provider"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Provider abstraction layer for LLM API clients"
+
+[dependencies]
+nyamu-config = { path = "../config", version = "0.8.53" }
+nyamu-agent = { path = "../agent", version = "0.8.53" }
+nyamu-secrets = { path = "../secrets", version = "0.8.53" }
+anyhow.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+tracing.workspace = true
+futures.workspace = true
+bytes.workspace = true

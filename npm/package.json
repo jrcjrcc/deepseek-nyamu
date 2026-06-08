@@ -1,0 +1,39 @@
+{
+  "name": "deepwhale",
+  "version": "0.8.53",
+  "description": "Install and run DeepWhale, the desktop AI coding assistant with nyamu engine.",
+  "license": "MIT",
+  "homepage": "https://github.com/nyamuwhale/deepwhale",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nyamuwhale/deepwhale.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nyamuwhale/deepwhale/issues"
+  },
+  "keywords": ["deepwhale", "nyamu", "ai", "coding", "tauri", "desktop"],
+  "type": "commonjs",
+  "bin": {
+    "deepwhale": "bin/deepwhale.js",
+    "dw": "bin/dw.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js --optional",
+    "prepublishOnly": "node scripts/verify-release-assets.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "preferGlobal": true,
+  "files": [
+    "bin/*.js",
+    "scripts/*.js",
+    "test/*.js",
+    "README.md",
+    "package.json"
+  ]
+}

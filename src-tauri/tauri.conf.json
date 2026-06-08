@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc1/tauri/dev/crates/tauri-config-schema/schema.json",
+  "productName": "nyamuWhale",
+  "version": "0.1.0",
+  "identifier": "com.nyamuWhale.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "nyamuWhale",
+        "width": 1240,
+        "height": 720,
+        "resizable": true,
+        "fullscreen": false,
+        "minWidth": 800,
+        "minHeight": 500
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/nyamu.ico"],
+    "resources": ["binaries/pandoc.exe"]
+  }
+}

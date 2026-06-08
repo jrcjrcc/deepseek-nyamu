@@ -1,0 +1,68 @@
+﻿# DeepWhale (nyamuWhale) Rust 工作区定义
+#
+# 工作区包含：
+# - src-tauri: Tauri 桌面应用（前端 + 后端集成）
+# - vendor/nyamu/crates/*: nyamu 引擎核心 crate（agent, config, core, provider 等 12 个）
+#
+# 工作区级依赖声明，子 crate 通过 `xxx.workspace = true` 引用。
+# 所有 crate 统一使用 edition 2024 和 Rust 1.88 最低版本。
+
+[workspace]
+members = [
+    "src-tauri",
+    "vendor/nyamu/crates/agent",
+    "vendor/nyamu/crates/app-server",
+    "vendor/nyamu/crates/config",
+    "vendor/nyamu/crates/core",
+    "vendor/nyamu/crates/execpolicy",
+    "vendor/nyamu/crates/hooks",
+    "vendor/nyamu/crates/mcp",
+    "vendor/nyamu/crates/protocol",
+    "vendor/nyamu/crates/provider",
+    "vendor/nyamu/crates/release",
+    "vendor/nyamu/crates/secrets",
+    "vendor/nyamu/crates/state",
+    "vendor/nyamu/crates/tools",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.8.53"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/user/nyamuwhale"
+description = "DeepWhale — nyamu engine with nyamu-style desktop UI"
+
+# ─── 工作区共享依赖 ──────────────────────────────────────────────
+# 子 crate 通过 `xxx.workspace = true` 引用以下依赖，
+# 确保版本一致性，避免依赖冲突。
+[workspace.dependencies]
+anyhow = "1.0.100"
+clap = { version = "4.5.54", features = ["derive"] }
+clap_complete = "4.5"
+async-trait = "0.1.89"
+chrono = { version = "0.4.43", features = ["serde"] }
+dirs = "6.0.0"
+reqwest = { version = "0.12.12", default-features = true, features = ["json", "stream", "blocking"] }
+rusqlite = { version = "0.32.1", features = ["bundled"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+semver = "1.0.28"
+thiserror = "2.0"
+tokio = { version = "1.49.0", features = ["full"] }
+toml = "0.9.7"
+sha2 = "0.10"
+bytes = "1.9"
+futures = "0.3"
+futures-core = "0.3"
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1.11", features = ["v4"] }
+
+# Tauri 依赖
+tauri = { version = "2", features = [] }
+tauri-build = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tempfile = { version = "3.27", features = [] }

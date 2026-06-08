@@ -1,0 +1,59 @@
+# DeepWhale Docker 构建忽略文件
+# 排除构建产物、开发依赖、敏感文件等不需要打入镜像的内容
+# Build artifacts
+/target/
+*.pdb
+*.dll
+*.so
+*.dylib
+*.rlib
+
+# Sensitive
+.env
+.env.*
+
+# Development
+/node_modules/
+/.vscode/
+/.idea/
+*~
+.DS_Store
+
+# Git
+/.git/
+/.gitignore
+/.gitattributes
+
+# CI/CD
+/.github/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+venv/
+.venv/
+
+# Logs
+*.log
+
+# Generated dist
+/dist/
+/outputs/
+/src-tauri/gen/
+
+# Local runtime state
+/.deepwhale/
+/.deepseek/
+
+# Claude / CodeWhale
+/.claude/
+/.codewhale/
+
+# Docs
+/docs/
+/*.md
+!/README.md
+
+# Tauri dependencies
+/src-tauri/vendor/

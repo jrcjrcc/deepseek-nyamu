@@ -1,0 +1,21 @@
+[package]
+name = "nyamu-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core runtime boundaries for DeepSeek workspace architecture"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+nyamu-agent = { path = "../agent", version = "0.8.53" }
+nyamu-config = { path = "../config", version = "0.8.53" }
+nyamu-execpolicy = { path = "../execpolicy", version = "0.8.53" }
+nyamu-hooks = { path = "../hooks", version = "0.8.53" }
+nyamu-mcp = { path = "../mcp", version = "0.8.53" }
+nyamu-protocol = { path = "../protocol", version = "0.8.53" }
+nyamu-state = { path = "../state", version = "0.8.53" }
+nyamu-tools = { path = "../tools", version = "0.8.53" }
+serde_json.workspace = true
+uuid.workspace = true

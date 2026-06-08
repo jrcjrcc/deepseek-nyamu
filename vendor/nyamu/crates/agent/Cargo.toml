@@ -1,0 +1,11 @@
+[package]
+name = "nyamu-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Model/provider registry and fallback strategy for DeepSeek workspace architecture"
+
+[dependencies]
+nyamu-config = { path = "../config", version = "0.8.53" }
+serde.workspace = true
